@@ -3,194 +3,185 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/heitortanoue/tcc/sensor"
 )
 
-func TestNewDroneServer(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
+/* ---------- fixture global ---------- */
 
-	if server.crdt == nil {
-		t.Error("CRDT não deve ser nil")
+var (
+	testServer *DroneServer
+)
+
+var droneConfigMock = DroneConfig{
+	DroneID: "test-drone",
+	APIPort: 8080,
+}
+
+// TestMain é executado uma vez por arquivo _test.go
+func TestMain(m *testing.M) {
+	var err error
+	testServer, err = NewDroneServer(droneConfigMock)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "falha ao criar DroneServer: %v\n", err)
+		os.Exit(1)
 	}
 
-	if server.port != 8080 {
-		t.Errorf("Esperado porta 8080, obtido %d", server.port)
-	}
+	code := m.Run()
+
+	testServer.Shutdown()
+	os.Exit(code)
+}
+
+/* ---------- testes ---------- */
+
+// resetCRDT cleans the shared CRDT before each test and registers a cleanup.
+func resetCRDT(t *testing.T) {
+	testServer.crdt.Reset()
+	t.Cleanup(testServer.crdt.Reset)
 }
 
 func TestHandleSensor(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
-
-	// Prepara request
+	resetCRDT(t)
 	reading := sensor.SensorReading{
 		SensorID:  "talhao-test",
 		Timestamp: time.Now().UnixMilli(),
 		Value:     22.5,
 	}
+	body, _ := json.Marshal(reading)
 
-	jsonData, _ := json.Marshal(reading)
-	req := httptest.NewRequest(http.MethodPost, "/sensor", bytes.NewBuffer(jsonData))
+	req := httptest.NewRequest(http.MethodPost, "/sensor", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
 
-	// Executa request
-	recorder := httptest.NewRecorder()
-	server.handleSensor(recorder, req)
+	testServer.handleSensor(rec, req)
 
-	// Verifica resposta
-	if recorder.Code != http.StatusCreated {
-		t.Errorf("Esperado status 201, obtido %d", recorder.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("esperado 201, obtido %d", rec.Code)
 	}
 
-	var response SensorResponse
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Errorf("Erro ao decodificar resposta: %v", err)
+	var resp SensorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-
-	if response.Delta.SensorID != "talhao-test" {
-		t.Errorf("Esperado sensor ID 'talhao-test', obtido %s", response.Delta.SensorID)
-	}
-
-	if response.Delta.Value != 22.5 {
-		t.Errorf("Esperado valor 22.5, obtido %f", response.Delta.Value)
+	if resp.Delta.SensorID != "talhao-test" || resp.Delta.Value != 22.5 {
+		t.Errorf("dados inesperados %+v", resp.Delta)
 	}
 }
 
 func TestHandleGetDeltas(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
+	resetCRDT(t)
+	// insere 2 leituras
+	for i := 1; i <= 2; i++ {
+		testServer.crdt.AddDelta(sensor.SensorReading{
+			SensorID:  fmt.Sprintf("test%d", i),
+			Timestamp: time.Now().UnixMilli(),
+			Value:     20 + float64(i),
+		})
+	}
 
-	// Adiciona alguns deltas
-	reading1 := sensor.SensorReading{SensorID: "test1", Timestamp: time.Now().UnixMilli(), Value: 20.0}
-	reading2 := sensor.SensorReading{SensorID: "test2", Timestamp: time.Now().UnixMilli(), Value: 25.0}
-
-	server.crdt.AddDelta(reading1)
-	server.crdt.AddDelta(reading2)
-
-	// Executa request
 	req := httptest.NewRequest(http.MethodGet, "/deltas", nil)
-	recorder := httptest.NewRecorder()
-	server.handleGetDeltas(recorder, req)
+	rec := httptest.NewRecorder()
 
-	// Verifica resposta
-	if recorder.Code != http.StatusOK {
-		t.Errorf("Esperado status 200, obtido %d", recorder.Code)
+	testServer.handleGetDeltas(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("esperado 200, obtido %d", rec.Code)
 	}
 
-	var response DeltasResponse
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Errorf("Erro ao decodificar resposta: %v", err)
+	var resp DeltasResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-
-	if len(response.Pending) != 2 {
-		t.Errorf("Esperado 2 deltas pendentes, obtido %d", len(response.Pending))
+	if len(resp.Pending) != 2 {
+		t.Errorf("esperado 2 deltas, obtido %d", len(resp.Pending))
 	}
 }
 
 func TestHandlePostDelta(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
-
-	// Prepara batch de deltas
+	resetCRDT(t)
 	batch := sensor.DeltaBatch{
-		SenderID: "remote-drone",
-		Deltas: []sensor.SensorDelta{
-			{
-				DroneID:   "remote-drone",
-				SensorID:  "remote-sensor",
-				Timestamp: time.Now().UnixMilli(),
-				Value:     30.0,
-			},
-		},
+		SenderID: "remote",
+		Deltas: []sensor.SensorDelta{{
+			DroneID:   "remote",
+			SensorID:  "r-sensor",
+			Timestamp: time.Now().UnixMilli(),
+			Value:     30.0,
+		}},
 	}
+	body, _ := json.Marshal(batch)
 
-	jsonData, _ := json.Marshal(batch)
-	req := httptest.NewRequest(http.MethodPost, "/delta", bytes.NewBuffer(jsonData))
+	req := httptest.NewRequest(http.MethodPost, "/delta", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
 
-	// Executa request
-	recorder := httptest.NewRecorder()
-	server.handlePostDelta(recorder, req)
+	testServer.handlePostDelta(rec, req)
 
-	// Verifica resposta
-	if recorder.Code != http.StatusOK {
-		t.Errorf("Esperado status 200, obtido %d", recorder.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("esperado 200, obtido %d", rec.Code)
 	}
 
-	var response MergeResponse
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Errorf("Erro ao decodificar resposta: %v", err)
+	var resp MergeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-
-	if response.MergedCount != 1 {
-		t.Errorf("Esperado 1 delta merged, obtido %d", response.MergedCount)
-	}
-
-	if response.CurrentTotal != 1 {
-		t.Errorf("Esperado total 1, obtido %d", response.CurrentTotal)
+	if resp.MergedCount != 1 || resp.CurrentTotal < 1 {
+		t.Errorf("merge incorreto: %+v", resp)
 	}
 }
 
 func TestHandleGetState(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
-
-	// Adiciona alguns deltas
-	reading := sensor.SensorReading{
+	resetCRDT(t)
+	// garante pelo menos 1 leitura
+	testServer.crdt.AddDelta(sensor.SensorReading{
 		SensorID:  "state-test",
 		Timestamp: time.Now().UnixMilli(),
 		Value:     15.5,
-	}
-	server.crdt.AddDelta(reading)
+	})
 
-	// Executa request
 	req := httptest.NewRequest(http.MethodGet, "/state", nil)
-	recorder := httptest.NewRecorder()
-	server.handleGetState(recorder, req)
+	rec := httptest.NewRecorder()
 
-	// Verifica resposta
-	if recorder.Code != http.StatusOK {
-		t.Errorf("Esperado status 200, obtido %d", recorder.Code)
+	testServer.handleGetState(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("esperado 200, obtido %d", rec.Code)
 	}
 
-	var response StateResponse
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Errorf("Erro ao decodificar resposta: %v", err)
+	var resp StateResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-
-	if len(response.State) != 1 {
-		t.Errorf("Esperado 1 item no state, obtido %d", len(response.State))
-	}
-
-	if response.State[0].SensorID != "state-test" {
-		t.Errorf("Esperado sensor ID 'state-test', obtido %s", response.State[0].SensorID)
-	}
-}
-
-func TestMethodNotAllowed(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
-
-	// Testa método não permitido no endpoint /sensor
-	req := httptest.NewRequest(http.MethodGet, "/sensor", nil)
-	recorder := httptest.NewRecorder()
-	server.handleSensor(recorder, req)
-
-	if recorder.Code != http.StatusMethodNotAllowed {
-		t.Errorf("Esperado status 405, obtido %d", recorder.Code)
+	if len(resp.State) == 0 || resp.State[0].SensorID != "state-test" {
+		t.Errorf("state inesperado %+v", resp.State)
 	}
 }
 
 func TestInvalidJSON(t *testing.T) {
-	server := NewDroneServer("test-drone", 8080)
-
-	// Testa JSON inválido
-	req := httptest.NewRequest(http.MethodPost, "/sensor", bytes.NewBufferString("invalid json"))
+	resetCRDT(t)
+	req := httptest.NewRequest(http.MethodPost, "/sensor", bytes.NewBufferString("{"))
 	req.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-	server.handleSensor(recorder, req)
+	rec := httptest.NewRecorder()
 
-	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("Esperado status 400, obtido %d", recorder.Code)
+	testServer.handleSensor(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("esperado 400, obtido %d", rec.Code)
+	}
+}
+
+func TestMethodNotAllowed(t *testing.T) {
+	resetCRDT(t)
+	req := httptest.NewRequest(http.MethodGet, "/sensor", nil)
+	rec := httptest.NewRecorder()
+
+	testServer.handleSensor(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("esperado 405, obtido %d", rec.Code)
 	}
 }

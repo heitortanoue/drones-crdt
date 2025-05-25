@@ -8,21 +8,26 @@ import (
 	"time"
 
 	"github.com/heitortanoue/tcc/sensor"
+	"github.com/heitortanoue/tcc/swim"
 )
 
-// PeerClient representa um cliente para comunicação com peers
+// PeerClient representa um cliente para comunicação com peers usando SWIM
 type PeerClient struct {
-	peerURLs []string           // URLs dos peers
-	crdt     *sensor.SensorCRDT // referência ao CRDT local
-	droneID  string             // ID deste drone
+	membership *swim.MembershipManager // gerenciador de membership SWIM
+	crdt       *sensor.SensorCRDT      // referência ao CRDT local
+	droneID    string                  // ID deste drone
+	httpClient *http.Client            // cliente HTTP reutilizável
 }
 
-// NewPeerClient cria um novo cliente para gossip
-func NewPeerClient(droneID string, crdt *sensor.SensorCRDT, peerURLs []string) *PeerClient {
+// NewPeerClient cria um novo cliente para gossip usando SWIM
+func NewPeerClient(droneID string, crdt *sensor.SensorCRDT, membership *swim.MembershipManager) *PeerClient {
 	return &PeerClient{
-		droneID:  droneID,
-		crdt:     crdt,
-		peerURLs: peerURLs,
+		droneID:    droneID,
+		crdt:       crdt,
+		membership: membership,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second, // timeout para requisições HTTP
+		},
 	}
 }
 
@@ -31,12 +36,13 @@ func (p *PeerClient) StartGossip(intervalSeconds int) {
 	ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
 	go func() {
 		for range ticker.C {
+			fmt.Printf("[GOSSIP] Iniciando gossip para %s\n", p.droneID)
 			p.gossipToPeers()
 		}
 	}()
 }
 
-// gossipToPeers envia deltas pendentes para todos os peers
+// gossipToPeers envia deltas pendentes para todos os peers ativos descobertos via SWIM
 func (p *PeerClient) gossipToPeers() {
 	pending := p.crdt.GetPendingDeltas()
 
@@ -51,10 +57,18 @@ func (p *PeerClient) gossipToPeers() {
 		Deltas:   pending,
 	}
 
-	// Envia para todos os peers
+	// Obtém URLs dos peers ativos via SWIM memberlist
+	peerURLs := p.membership.GetMemberURLs()
+	if len(peerURLs) == 0 {
+		fmt.Printf("[GOSSIP] Nenhum peer ativo encontrado via SWIM\n")
+		return
+	}
+
+	// Envia para todos os peers descobertos
 	successCount := 0
-	for _, peerURL := range p.peerURLs {
+	for _, peerURL := range peerURLs {
 		if p.sendDeltaToPeer(peerURL, batch) {
+			fmt.Printf("[GOSSIP] Enviado %d deltas para %s\n", len(pending), peerURL)
 			successCount++
 		}
 	}
@@ -62,12 +76,12 @@ func (p *PeerClient) gossipToPeers() {
 	// Se conseguiu enviar para pelo menos um peer, limpa o buffer
 	if successCount > 0 {
 		p.crdt.ClearPendingDeltas()
-		fmt.Printf("[GOSSIP] Enviados %d deltas para %d/%d peers\n",
-			len(pending), successCount, len(p.peerURLs))
+		fmt.Printf("[GOSSIP] Enviados %d deltas para %d/%d peers (via SWIM)\n",
+			len(pending), successCount, len(peerURLs))
 	}
 }
 
-// sendDeltaToPeer envia um lote de deltas para um peer específico
+// sendDeltaToPeer envia um lote de deltas para um peer específico com retry
 func (p *PeerClient) sendDeltaToPeer(peerURL string, batch sensor.DeltaBatch) bool {
 	// Serializa o lote
 	jsonData, err := json.Marshal(batch)
@@ -76,27 +90,44 @@ func (p *PeerClient) sendDeltaToPeer(peerURL string, batch sensor.DeltaBatch) bo
 		return false
 	}
 
-	// Envia POST para o peer
-	url := peerURL + "/delta"
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		fmt.Printf("[GOSSIP] Erro ao enviar para %s: %v\n", url, err)
-		return false
-	}
-	defer resp.Body.Close()
+	// Tenta enviar com retry simples
+	maxRetries := 2
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Backoff exponencial: 1s, 2s
+			backoff := time.Duration(1<<attempt) * time.Second
+			time.Sleep(backoff)
+			fmt.Printf("[GOSSIP] Retry %d/%d para %s\n", attempt, maxRetries, peerURL)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("[GOSSIP] Resposta não-OK de %s: %d\n", url, resp.StatusCode)
-		return false
+		// Envia POST para o peer
+		url := peerURL + "/delta"
+		resp, err := p.httpClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			if attempt == maxRetries {
+				fmt.Printf("[GOSSIP] Falha final ao enviar para %s: %v\n", url, err)
+			}
+			continue
+		}
+
+		resp.Body.Close() // fecha imediatamente já que não lemos o body
+
+		if resp.StatusCode == http.StatusOK {
+			return true
+		}
+
+		if attempt == maxRetries {
+			fmt.Printf("[GOSSIP] Resposta não-OK de %s: %d\n", url, resp.StatusCode)
+		}
 	}
 
-	return true
+	return false
 }
 
 // PullFromPeer solicita deltas de um peer específico (anti-entropy pull)
 func (p *PeerClient) PullFromPeer(peerURL string) error {
 	// Busca deltas do peer
-	resp, err := http.Get(peerURL + "/deltas")
+	resp, err := p.httpClient.Get(peerURL + "/deltas")
 	if err != nil {
 		return fmt.Errorf("erro ao buscar deltas de %s: %v", peerURL, err)
 	}
@@ -127,12 +158,37 @@ func (p *PeerClient) PullFromPeer(peerURL string) error {
 	return nil
 }
 
-// GetPeerURLs retorna a lista de URLs dos peers
-func (p *PeerClient) GetPeerURLs() []string {
-	return p.peerURLs
+// PullFromAllPeers executa pull de todos os peers ativos
+func (p *PeerClient) PullFromAllPeers() error {
+	peerURLs := p.membership.GetMemberURLs()
+	if len(peerURLs) == 0 {
+		return fmt.Errorf("nenhum peer ativo encontrado")
+	}
+
+	successCount := 0
+	for _, peerURL := range peerURLs {
+		if err := p.PullFromPeer(peerURL); err != nil {
+			fmt.Printf("[PULL] Erro ao puxar de %s: %v\n", peerURL, err)
+		} else {
+			successCount++
+		}
+	}
+
+	fmt.Printf("[PULL] Pull bem-sucedido de %d/%d peers\n", successCount, len(peerURLs))
+	return nil
 }
 
-// AddPeer adiciona um novo peer à lista
-func (p *PeerClient) AddPeer(peerURL string) {
-	p.peerURLs = append(p.peerURLs, peerURL)
+// GetPeerURLs retorna a lista de URLs dos peers ativos via SWIM
+func (p *PeerClient) GetPeerURLs() []string {
+	return p.membership.GetMemberURLs()
+}
+
+// GetActivePeerCount retorna o número de peers ativos
+func (p *PeerClient) GetActivePeerCount() int {
+	return len(p.membership.GetLiveMembers())
+}
+
+// GetMembershipStats retorna estatísticas do membership
+func (p *PeerClient) GetMembershipStats() map[string]interface{} {
+	return p.membership.GetStats()
 }

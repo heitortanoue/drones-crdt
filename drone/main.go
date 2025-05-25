@@ -5,66 +5,130 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/heitortanoue/tcc/api"
-	"github.com/heitortanoue/tcc/gossip"
 )
 
 func main() {
 	// Flags da linha de comando
 	var (
-		droneID        = flag.String("drone", "drone-01", "ID único deste drone")
-		port           = flag.Int("port", 8080, "Porta para o servidor HTTP")
-		peers          = flag.String("peers", "", "URLs dos peers separadas por vírgula (ex: http://drone-02:8080,http://drone-03:8080)")
-		gossipInterval = flag.Int("gossip", 5, "Intervalo do gossip em segundos (0 para desabilitar)")
+		droneID   = flag.String("drone", "drone-01", "ID único deste drone")
+		apiPort   = flag.Int("port", 8080, "Porta para o servidor HTTP da API")
+		swimPort  = flag.Int("swim-port", 7946, "Porta para o protocolo SWIM")
+		bindAddr  = flag.String("bind", "0.0.0.0", "Endereço para bind do SWIM")
+		seedNodes = flag.String("seeds", "", "Nós seeds separados por vírgula (ex: drone-02,drone-03)")
+		showUsage = flag.Bool("help", false, "Mostra ajuda de uso")
 	)
 	flag.Parse()
 
-	// Cria o servidor do drone
-	server := api.NewDroneServer(*droneID, *port)
+	if *showUsage {
+		printUsage()
+		return
+	}
 
-	// Configura gossip se peers foram fornecidos
-	if *peers != "" && *gossipInterval > 0 {
-		peerURLs := strings.Split(*peers, ",")
-		for i, url := range peerURLs {
-			peerURLs[i] = strings.TrimSpace(url)
-		}
-
-		client := gossip.NewPeerClient(*droneID, server.GetCRDT(), peerURLs)
-		client.StartGossip(*gossipInterval)
-
-		fmt.Printf("Gossip configurado com %d peers, intervalo %ds\n", len(peerURLs), *gossipInterval)
-		for _, peer := range peerURLs {
-			fmt.Printf("  - %s\n", peer)
+	// Processa a lista de seeds
+	var seeds []string
+	if *seedNodes != "" {
+		seeds = strings.Split(*seedNodes, ",")
+		for i, seed := range seeds {
+			seeds[i] = strings.TrimSpace(seed)
 		}
 	}
 
-	// Inicia o servidor
-	fmt.Printf("Drone %s iniciando na porta %d\n", *droneID, *port)
+	// Configuração do drone
+	config := api.DroneConfig{
+		DroneID:   *droneID,
+		APIPort:   *apiPort,
+		SWIMPort:  *swimPort,
+		BindAddr:  *bindAddr,
+		SeedNodes: seeds,
+	}
 
-	var err = server.Start()
+	// Cria o servidor do drone
+	server, err := api.NewDroneServer(config)
 	if err != nil {
-		log.Fatal("Erro ao iniciar servidor:", err)
+		log.Fatalf("Erro ao criar servidor: %v", err)
+	}
+
+	// Setup graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigCh
+		fmt.Println("\nRecebido sinal de interrupção, desligando...")
+		if err := server.Shutdown(); err != nil {
+			fmt.Printf("Erro ao desligar: %v\n", err)
+		}
+		os.Exit(0)
+	}()
+
+	// Mostra informações de inicialização
+	fmt.Printf("=== Drone %s ===\n", *droneID)
+	fmt.Printf("API REST: http://%s:%d\n", *bindAddr, *apiPort)
+	fmt.Printf("SWIM: %s:%d\n", *bindAddr, *swimPort)
+
+	if len(seeds) > 0 {
+		fmt.Printf("Seeds: %v\n", seeds)
+	} else {
+		fmt.Printf("Modo standalone (primeiro nó do cluster)\n")
+	}
+
+	fmt.Printf("Iniciando...\n\n")
+
+	// Inicia o servidor (bloqueia até terminar)
+	err = server.Start()
+	if err != nil {
+		log.Fatalf("Erro ao iniciar servidor: %v", err)
 	}
 }
 
 // printUsage mostra exemplos de uso
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `
-Uso: %s [opções]
+=== Drone SWIM Cluster ===
 
-Exemplos:
-  # Drone único na porta 8080
+USAGE:
+  %s [opções]
+
+EXAMPLES:
+  # Primeiro drone do cluster (seed)
   %s -drone=drone-01 -port=8080
 
-  # Drone com gossip para 2 peers
-  %s -drone=drone-02 -port=8081 -peers="http://localhost:8080,http://localhost:8082" -gossip=5
+  # Segundo drone conectando ao primeiro
+  %s -drone=drone-02 -port=8081 -seeds=drone-01
 
-  # Drone com descoberta de sensores
-  %s -drone=drone-01 -port=8080 -discovery=9999
+  # Drone com porta SWIM customizada
+  %s -drone=drone-03 -port=8082 -swim-port=7947 -seeds=drone-01,drone-02
 
-Opções:
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+  # Cluster com bind específico (útil em Docker)
+  %s -drone=drone-01 -bind=0.0.0.0 -port=8080 -swim-port=7946
+
+OPTIONS:
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+
 	flag.PrintDefaults()
+
+	fmt.Fprintf(os.Stderr, `
+ENDPOINTS:
+  GET  /stats     - Estatísticas do drone e cluster
+  GET  /members   - Lista membros do cluster SWIM
+  GET  /state     - Estado atual do CRDT
+  GET  /deltas    - Deltas pendentes para gossip
+  POST /sensor    - Adiciona leitura de sensor
+  POST /delta     - Recebe deltas de outros drones
+  POST /join      - Conecta a um nó específico
+  POST /cleanup   - Limpa deltas antigos
+
+NOTES:
+  - Porta SWIM (padrão 7946) usada para membership/failure detection
+  - Porta API (padrão 8080) usada para REST API e gossip δ-CRDT
+  - Seeds são IDs de nós, não URLs (ex: "drone-01", não "http://drone-01:8080")
+  - Failure detection automática em ~5s via protocolo SWIM
+  - Anti-entropy gossip a cada 30s entre membros descobertos
+
+`)
 }

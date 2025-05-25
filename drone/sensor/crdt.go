@@ -129,6 +129,15 @@ func (s *SensorCRDT) GetTotalDeltasCount() int {
 	return len(s.deltas)
 }
 
+// Reset limpa todos os deltas e o buffer pendente
+func (s *SensorCRDT) Reset() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.deltas = make(map[string]*SensorDelta)
+	s.pendingBuf = s.pendingBuf[:0] // limpa mas mantém capacidade
+	s.latestByArea = make(map[string]*SensorDelta)
+}
+
 // CleanupOldDeltas remove deltas antigos com base em um limite de tempo (em milissegundos)
 func (s *SensorCRDT) CleanupOldDeltas(limitTimestamp int64) int {
 	s.mutex.Lock()
