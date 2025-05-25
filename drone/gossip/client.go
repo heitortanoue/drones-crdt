@@ -7,20 +7,27 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/heitortanoue/tcc/sensor"
-	"github.com/heitortanoue/tcc/swim"
 )
+
+// MembershipProvider interface para abstrair o acesso ao membership
+type MembershipProvider interface {
+	GetMemberURLs() []string
+	GetLiveMembers() []*memberlist.Node
+	GetStats() map[string]interface{}
+}
 
 // PeerClient representa um cliente para comunicação com peers usando SWIM
 type PeerClient struct {
-	membership *swim.MembershipManager // gerenciador de membership SWIM
-	crdt       *sensor.SensorCRDT      // referência ao CRDT local
-	droneID    string                  // ID deste drone
-	httpClient *http.Client            // cliente HTTP reutilizável
+	membership MembershipProvider // interface de membership
+	crdt       *sensor.SensorCRDT // referência ao CRDT local
+	droneID    string             // ID deste drone
+	httpClient *http.Client       // cliente HTTP reutilizável
 }
 
 // NewPeerClient cria um novo cliente para gossip usando SWIM
-func NewPeerClient(droneID string, crdt *sensor.SensorCRDT, membership *swim.MembershipManager) *PeerClient {
+func NewPeerClient(droneID string, crdt *sensor.SensorCRDT, membership MembershipProvider) *PeerClient {
 	return &PeerClient{
 		droneID:    droneID,
 		crdt:       crdt,

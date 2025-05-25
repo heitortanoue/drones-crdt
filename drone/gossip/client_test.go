@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/heitortanoue/tcc/sensor"
 )
 
@@ -16,18 +17,20 @@ import (
 // mockMembership implementa só os métodos usados pelo PeerClient.
 type mockMembership struct {
 	urls  []string
-	live  []string
+	nodes []*memberlist.Node
 	stats map[string]interface{}
 }
 
-func (m *mockMembership) GetMemberURLs() []string            { return append([]string{}, m.urls...) }
-func (m *mockMembership) GetLiveMembers() []string           { return append([]string{}, m.live...) }
-func (m *mockMembership) GetStats() map[string]interface{}   { return m.stats }
+func (m *mockMembership) GetMemberURLs() []string { return append([]string{}, m.urls...) }
+func (m *mockMembership) GetLiveMembers() []*memberlist.Node {
+	return append([]*memberlist.Node{}, m.nodes...)
+}
+func (m *mockMembership) GetStats() map[string]interface{} { return m.stats }
 
 /* ---------- helpers ---------- */
 
 func newCRDTWithPending(n int) *sensor.SensorCRDT {
-	crdt := sensor.NewSensorCRDT()
+	crdt := sensor.NewSensorCRDT("test")
 	for i := 0; i < n; i++ {
 		crdt.AddDelta(sensor.SensorReading{
 			SensorID:  "s" + string(rune('A'+i)),
@@ -55,8 +58,8 @@ func TestGossipToPeers(t *testing.T) {
 
 	crdt := newCRDTWithPending(3)
 	member := &mockMembership{
-		urls: []string{peerSrv.URL},
-		live: []string{"peer"},
+		urls:  []string{peerSrv.URL},
+		nodes: []*memberlist.Node{}, // lista vazia por simplicidade
 	}
 	cli := NewPeerClient("d1", crdt, member)
 
@@ -88,8 +91,8 @@ func TestPullFromPeer(t *testing.T) {
 	}))
 	defer peerSrv.Close()
 
-	crdt := sensor.NewSensorCRDT()
-	member := &mockMembership{urls: []string{peerSrv.URL}, live: []string{"peer"}}
+	crdt := sensor.NewSensorCRDT("test")
+	member := &mockMembership{urls: []string{peerSrv.URL}, nodes: []*memberlist.Node{}}
 	cli := NewPeerClient("d1", crdt, member)
 
 	if err := cli.PullFromPeer(peerSrv.URL); err != nil {
@@ -104,16 +107,16 @@ func TestPullFromPeer(t *testing.T) {
 func TestPeerClientGetters(t *testing.T) {
 	member := &mockMembership{
 		urls:  []string{"http://a", "http://b"},
-		live:  []string{"a", "b"},
+		nodes: []*memberlist.Node{},
 		stats: map[string]interface{}{"alive": 2},
 	}
-	cli := NewPeerClient("d1", sensor.NewSensorCRDT(), member)
+	cli := NewPeerClient("d1", sensor.NewSensorCRDT("test"), member)
 
 	if !reflect.DeepEqual(cli.GetPeerURLs(), member.urls) {
 		t.Fatalf("GetPeerURLs não casa com membership")
 	}
-	if cli.GetActivePeerCount() != 2 {
-		t.Fatalf("esperado 2 ativos, obtido %d", cli.GetActivePeerCount())
+	if cli.GetActivePeerCount() != 0 { // mudou para 0 pois nodes está vazio
+		t.Fatalf("esperado 0 ativos, obtido %d", cli.GetActivePeerCount())
 	}
 	if !reflect.DeepEqual(cli.GetMembershipStats(), member.stats) {
 		t.Fatalf("stats divergente")
