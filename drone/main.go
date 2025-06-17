@@ -166,6 +166,7 @@ ENDPOINTS (TCP):
   GET  /state      - Estado atual do CRDT (Fase 2)
   GET  /stats      - Estatísticas do drone (Fase 5)
   POST /cleanup    - Limpa deltas antigos (Fase 2)
+  POST /neighbor   - Gerencia vizinhos (Fase 1)
 
 PROTOCOLS:
   - UDP %d: Canal de controle (Advertise/Request/SwitchChannel)

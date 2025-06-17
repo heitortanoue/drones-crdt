@@ -2,4 +2,8 @@ module github.com/heitortanoue/tcc
 
 go 1.24.2
 
-require github.com/google/uuid v1.6.0 // indirect
+require (
+	github.com/google/uuid v1.6.0 // indirect
+	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+)

@@ -1,3 +1,4 @@
+// UDPServer implements Gappa canal‑0 control using **multicast only**; no broadcast fallback.
 package network
 
 import (
@@ -5,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"golang.org/x/net/ipv4"
 )
 
 // MessageProcessor interface para processar mensagens de controle
@@ -20,6 +23,7 @@ type UDPServer struct {
 	droneID          string
 	port             int
 	running          bool
+	localIP          net.IP
 }
 
 // NewUDPServer cria um novo servidor UDP
@@ -49,9 +53,20 @@ func (s *UDPServer) Start() error {
 		return fmt.Errorf("erro ao iniciar servidor UDP: %v", err)
 	}
 
+	// guarda IP local da conexão para filtrar pacotes próprios
+	if la, ok := s.conn.LocalAddr().(*net.UDPAddr); ok {
+		s.localIP = la.IP
+	}
+
+	// Configura multicast Gappa
+	if err := s.setupMulticast(); err != nil {
+		s.conn.Close()
+		return fmt.Errorf("erro ao configurar multicast: %v", err)
+	}
+
 	// Habilita configurações otimizadas para multicast
 	if err := s.enableBroadcast(); err != nil {
-		log.Printf("[UDP] Aviso: não foi possível otimizar para multicast: %v", err)
+		log.Fatalf("[UDP] ERRO: não foi possível otimizar para multicast: %v", err)
 	}
 
 	s.running = true
@@ -72,7 +87,7 @@ func (s *UDPServer) Stop() error {
 
 // handleIncomingPackets processa pacotes UDP recebidos
 func (s *UDPServer) handleIncomingPackets() {
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 2048) // Aumentado para comportar pacotes maiores
 
 	for s.running {
 		n, addr, err := s.conn.ReadFromUDP(buffer)
@@ -84,15 +99,17 @@ func (s *UDPServer) handleIncomingPackets() {
 		}
 
 		// Evita adicionar o próprio drone como vizinho
-		if addr.Port == s.port {
+		if addr.Port == s.port && addr.IP.Equal(s.localIP) {
+			log.Printf("[UDP] Ignorando pacote de %s:%d (próprio drone)", addr.IP.String(), addr.Port)
 			continue
 		}
 
-		// Mapeia porta UDP para porta TCP (UDP 7000->TCP 8080, UDP 7001->TCP 8081, etc)
-		tcpPort := 8080 + (addr.Port - 7000)
-		s.neighborTable.AddOrUpdate(addr.IP, tcpPort)
+		log.Printf("[UDP] Pacote recebido de %s:%d (%d bytes)", addr.IP.String(), addr.Port, n)
 
-		log.Printf("[UDP] Vizinho descoberto: %s (UDP:%d -> TCP:%d)", addr.IP.String(), addr.Port, tcpPort)
+		// Atualiza neighborTable com porta TCP fixa 8080
+		s.neighborTable.AddOrUpdate(addr.IP, 8080)
+
+		log.Printf("[UDP] Vizinho descoberto: %s (UDP:%d)", addr.IP.String(), addr.Port)
 
 		// Processa o conteúdo do pacote
 		go s.processPacket(buffer[:n], addr)
@@ -101,16 +118,20 @@ func (s *UDPServer) handleIncomingPackets() {
 
 // processPacket processa um pacote UDP específico
 func (s *UDPServer) processPacket(data []byte, addr *net.UDPAddr) {
-	log.Printf("[UDP] Pacote recebido de %s: %d bytes", addr.IP.String(), len(data))
+	log.Printf("[UDP] Processando pacote de %s:%d (%d bytes)", addr.IP.String(), addr.Port, len(data))
 
 	// Fase 3: Integração com sistema de controle
 	if s.messageProcessor != nil {
+		log.Printf("[UDP] Enviando para messageProcessor...")
 		s.messageProcessor.ProcessMessage(data, addr.IP.String())
 	} else {
+		log.Printf("[UDP] Nenhum messageProcessor configurado, tentando decode JSON...")
 		// Fallback: tenta decodificar como JSON para debug
 		var msg interface{}
 		if err := json.Unmarshal(data, &msg); err == nil {
-			log.Printf("[UDP] Conteúdo: %+v", msg)
+			log.Printf("[UDP] Conteúdo JSON: %+v", msg)
+		} else {
+			log.Printf("[UDP] Não é JSON válido, dados raw: %s", string(data))
 		}
 	}
 }
@@ -145,11 +166,11 @@ func (s *UDPServer) SendTo(data []byte, targetIP string, targetPort int) error {
 	return s.SendPacket(data, ip, targetPort)
 }
 
-// Broadcast envia um pacote multicast seguindo protocolo Gappa
+// Broadcast envia exclusivamente via multicast Gappa.
+// Se o envio falhar, apenas registra o erro (sem fallback).
 func (s *UDPServer) Broadcast(data []byte) {
-	// Protocolo Gappa: usa apenas multicast para descoberta
 	if err := s.MulticastGappa(data); err != nil {
-		log.Printf("[UDP] Erro no multicast Gappa: %v", err)
+		log.Printf("[UDP] ERRO multicast: %v (nenhum fallback aplicado)", err)
 	}
 }
 
@@ -159,7 +180,6 @@ func (s *UDPServer) MulticastGappa(data []byte) error {
 		return fmt.Errorf("servidor UDP não iniciado")
 	}
 
-	// Endereço multicast conforme protocolo Gappa
 	multicastAddr := &net.UDPAddr{
 		IP:   net.ParseIP("224.0.0.118"),
 		Port: s.port,
@@ -167,38 +187,10 @@ func (s *UDPServer) MulticastGappa(data []byte) error {
 
 	_, err := s.conn.WriteToUDP(data, multicastAddr)
 	if err != nil {
-		// Fallback: se multicast falhar, tenta broadcast local para desenvolvimento
-		log.Printf("[UDP] Multicast falhou (%v), tentando fallback para broadcast local", err)
-		return s.fallbackBroadcast(data)
+		return fmt.Errorf("falha no envio multicast: %v", err)
 	}
 
-	log.Printf("[UDP] Multicast Gappa enviado para 224.0.0.118:%d (%d bytes)", s.port, len(data))
-	return nil
-}
-
-// fallbackBroadcast implementa fallback para quando multicast não estiver disponível
-func (s *UDPServer) fallbackBroadcast(data []byte) error {
-	// Para desenvolvimento local, tenta algumas portas conhecidas
-	localPorts := []int{7000, 7001, 7002, 7003, 7004}
-
-	successCount := 0
-	for _, port := range localPorts {
-		if port == s.port {
-			continue // Não envia para si mesmo
-		}
-
-		addr := &net.UDPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: port,
-		}
-
-		_, err := s.conn.WriteToUDP(data, addr)
-		if err == nil {
-			successCount++
-		}
-	}
-
-	log.Printf("[UDP] Fallback broadcast enviado para %d portas locais", successCount)
+	log.Printf("[UDP] Multicast Gappa enviado (%d bytes)", len(data))
 	return nil
 }
 
@@ -218,6 +210,57 @@ func (s *UDPServer) enableBroadcast() error {
 	}
 
 	log.Printf("[UDP] Socket configurado para broadcast")
+	return nil
+}
+
+// setupMulticast configura o servidor para receber pacotes multicast do grupo Gappa
+func (s *UDPServer) setupMulticast() error {
+	// Endereço do grupo multicast Gappa
+	multicastGroup := net.ParseIP("224.0.0.118")
+	if multicastGroup == nil {
+		return fmt.Errorf("endereço multicast inválido")
+	}
+
+	// Obtém a interface de rede padrão
+	intf, err := net.InterfaceByName("eth0")
+	if err != nil {
+		// Fallback: usa a primeira interface disponível
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			return fmt.Errorf("erro ao obter interfaces de rede: %v", err)
+		}
+
+		for _, iface := range interfaces {
+			if iface.Flags&net.FlagUp != 0 && iface.Flags&net.FlagLoopback == 0 {
+				intf = &iface
+				break
+			}
+		}
+
+		if intf == nil {
+			return fmt.Errorf("nenhuma interface de rede válida encontrada")
+		}
+	}
+
+	// Cria um PacketConn IPv4 para multicast
+	packetConn := ipv4.NewPacketConn(s.conn)
+
+	// Junta-se ao grupo multicast
+	if err := packetConn.JoinGroup(intf, &net.UDPAddr{IP: multicastGroup, Port: s.port}); err != nil {
+		return fmt.Errorf("erro ao entrar no grupo multicast: %v", err)
+	}
+
+	// Configura para receber pacotes multicast
+	if err := packetConn.SetMulticastInterface(intf); err != nil {
+		log.Printf("[UDP] Aviso: erro ao definir interface multicast: %v", err)
+	}
+
+	// Aumenta buffer de leitura na conexão UDP original
+	if err := s.conn.SetReadBuffer(65536); err != nil {
+		log.Printf("[UDP] Aviso: erro ao definir buffer de leitura: %v", err)
+	}
+
+	log.Printf("[UDP] Entrou no grupo multicast 224.0.0.118 na interface %s", intf.Name)
 	return nil
 }
 
