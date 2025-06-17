@@ -79,8 +79,7 @@ func (s *UDPServer) handleIncomingPackets() {
 		}
 
 		// Qualquer pacote recebido atualiza a tabela de vizinhos
-		// Por enquanto, assumimos porta TCP padrão 8080
-		s.neighborTable.AddOrUpdate(addr.IP, 8080)
+		s.neighborTable.AddOrUpdate(addr.IP, addr.Port)
 
 		// Processa o conteúdo do pacote
 		go s.processPacket(buffer[:n], addr)

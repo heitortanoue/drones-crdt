@@ -131,3 +131,8 @@ func (sa *SensorAPI) CleanupOldData(maxAge time.Duration) int {
 	limitTimestamp := time.Now().Add(-maxAge).UnixMilli()
 	return sa.deltaSet.CleanupOldDeltas(limitTimestamp)
 }
+
+// ApplyDelta aplica um delta individual no CRDT
+func (sa *SensorAPI) ApplyDelta(delta SensorDelta) {
+	sa.deltaSet.Apply(delta)
+}

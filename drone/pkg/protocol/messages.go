@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,10 +36,11 @@ type RequestMsg struct {
 	WantedIDs []uuid.UUID `json:"wanted_ids"`
 }
 
-// SwitchChannelMsg coordena transmissão de delta (Requisito F3)
+// SwitchChannelMsg coordena transmissão de delta (Requisito F3 e F6)
 type SwitchChannelMsg struct {
 	SenderID string    `json:"sender_id"`
 	DeltaID  uuid.UUID `json:"delta_id"`
+	ReqCount int       `json:"req_count"` // Contador de requests para eleição F6
 }
 
 // CreateAdvertiseMessage cria uma mensagem Advertise
@@ -172,4 +174,25 @@ func ParseSwitchChannelMessage(msg ControlMessage) (*SwitchChannelMsg, bool) {
 // getCurrentTimestamp retorna timestamp atual em milissegundos
 func getCurrentTimestamp() int64 {
 	return time.Now().UnixMilli()
+}
+
+// EncodeMessage codifica uma mensagem para envio
+func EncodeMessage(msgType string, data interface{}) ([]byte, error) {
+	msg := ControlMessage{
+		Type:      MessageType(msgType),
+		Timestamp: getCurrentTimestamp(),
+		Data:      data,
+	}
+
+	// Extrai sender_id do data se possível
+	switch d := data.(type) {
+	case AdvertiseMsg:
+		msg.SenderID = d.SenderID
+	case RequestMsg:
+		msg.SenderID = d.SenderID
+	case SwitchChannelMsg:
+		msg.SenderID = d.SenderID
+	}
+
+	return json.Marshal(msg)
 }

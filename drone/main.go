@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/heitortanoue/tcc/internal/config"
+	"github.com/heitortanoue/tcc/pkg/gossip"
 	"github.com/heitortanoue/tcc/pkg/network"
 	"github.com/heitortanoue/tcc/pkg/protocol"
 	"github.com/heitortanoue/tcc/pkg/sensor"
@@ -63,14 +64,18 @@ func main() {
 	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer)
 	election := protocol.NewTransmitterElection(cfg.DroneID, controlSystem)
 
+	// Cria sistema de disseminação TTL (Fase 4: F4 + F7)
+	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
+	disseminationSystem := gossip.NewDisseminationSystem(cfg.DroneID, cfg.Fanout, cfg.TTL, neighborTable, tcpSender)
+
 	// Integra sistema de controle com UDP server
 	udpServer.SetMessageProcessor(controlSystem)
 
 	// Integra handlers do sensor no TCP server
-	tcpServer.SensorHandler = createSensorHandler(sensorAPI)
-	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI)
+	tcpServer.SensorHandler = createSensorHandler(sensorAPI, disseminationSystem)
+	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI, disseminationSystem)
 	tcpServer.StateHandler = createStateHandler(sensorAPI)
-	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, election)
+	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, election, disseminationSystem)
 	tcpServer.CleanupHandler = createCleanupHandler(sensorAPI)
 
 	// Setup graceful shutdown
@@ -83,6 +88,9 @@ func main() {
 
 		fmt.Println("Parando sistema de controle...")
 		controlSystem.Stop()
+
+		fmt.Println("Parando sistema de disseminação...")
+		disseminationSystem.Stop()
 
 		fmt.Println("Parando coleta de sensores...")
 		sensorAPI.Stop()
@@ -112,6 +120,9 @@ func main() {
 
 	// Inicia sistema de controle (Fase 3: F3)
 	controlSystem.Start()
+
+	// Inicia sistema de disseminação (Fase 4: F4 + F7)
+	disseminationSystem.Start()
 
 	// Inicia servidor UDP
 	if err := udpServer.Start(); err != nil {
@@ -174,7 +185,7 @@ NOTES:
 // Handlers HTTP para integração com sistema de sensores
 
 // createSensorHandler cria handler para POST /sensor
-func createSensorHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
+func createSensorHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -194,6 +205,13 @@ func createSensorHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
 
 		delta := sensorAPI.AddManualReading(reading)
 
+		// Dissemina delta via gossip TTL (Fase 4: F4)
+		if dissemination.IsRunning() {
+			if err := dissemination.DisseminateDelta(delta); err != nil {
+				log.Printf("[MAIN] Erro ao disseminar delta %s: %v", delta.ID.String()[:8], err)
+			}
+		}
+
 		response := map[string]interface{}{
 			"delta":   delta,
 			"message": "Leitura adicionada com sucesso",
@@ -205,13 +223,39 @@ func createSensorHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
 }
 
 // createDeltaHandler cria handler para POST /delta
-func createDeltaHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
+func createDeltaHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 			return
 		}
 
+		// Tenta decodificar como DeltaMsg da disseminação (Fase 4)
+		var deltaMsg gossip.DeltaMsg
+		if err := json.NewDecoder(r.Body).Decode(&deltaMsg); err == nil {
+			// Processa delta recebido via gossip
+			if dissemination.IsRunning() {
+				if err := dissemination.ProcessReceivedDelta(deltaMsg); err != nil {
+					log.Printf("[MAIN] Erro ao processar delta recebido: %v", err)
+				}
+			}
+
+			// Integra no CRDT local
+			sensorAPI.ApplyDelta(deltaMsg.Data)
+
+			response := map[string]interface{}{
+				"status":    "received",
+				"delta_id":  deltaMsg.ID,
+				"ttl":       deltaMsg.TTL,
+				"sender_id": deltaMsg.SenderID,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Fallback para formato legado (DeltaBatch)
 		var batch sensor.DeltaBatch
 		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
 			http.Error(w, "JSON inválido", http.StatusBadRequest)
@@ -255,7 +299,7 @@ func createStateHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
 }
 
 // createStatsHandler cria handler para GET /stats
-func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, election *protocol.TransmitterElection) http.HandlerFunc {
+func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, election *protocol.TransmitterElection, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -266,12 +310,14 @@ func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.Neig
 		neighborStats := neighborTable.GetStats()
 		controlStats := controlSystem.GetStats()
 		electionStats := election.GetStats()
+		disseminationStats := dissemination.GetStats()
 
 		response := map[string]interface{}{
 			"sensor_system": sensorStats,
 			"network":       neighborStats,
 			"control":       controlStats,
 			"election":      electionStats,
+			"dissemination": disseminationStats, // Fase 4: F4 + F7
 			"uptime":        time.Since(startTime).Seconds(),
 		}
 

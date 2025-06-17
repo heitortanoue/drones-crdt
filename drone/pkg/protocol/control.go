@@ -11,11 +11,18 @@ import (
 	"github.com/heitortanoue/tcc/pkg/sensor"
 )
 
+// SensorAPIInterface define os métodos necessários da SensorAPI para o ControlSystem
+type SensorAPIInterface interface {
+	GetAllDeltaIDs() []uuid.UUID
+	GetMissingDeltas(haveIDs []uuid.UUID) []uuid.UUID
+	GetDeltasByIDs(ids []uuid.UUID) []sensor.SensorDelta
+}
+
 // ControlSystem gerencia protocolos de controle (Requisito F3)
 type ControlSystem struct {
 	droneID   string
-	sensorAPI *sensor.SensorAPI
-	udpSender UDPSender // Interface para envio UDP
+	sensorAPI SensorAPIInterface // Interface em vez de *sensor.SensorAPI
+	udpSender UDPSender          // Interface para envio UDP
 
 	// Contadores para eleição (base para F6)
 	reqCounters map[uuid.UUID]int // ReqCtr[id] para cada delta
@@ -36,7 +43,7 @@ type UDPSender interface {
 }
 
 // NewControlSystem cria um novo sistema de controle
-func NewControlSystem(droneID string, sensorAPI *sensor.SensorAPI, udpSender UDPSender) *ControlSystem {
+func NewControlSystem(droneID string, sensorAPI SensorAPIInterface, udpSender UDPSender) *ControlSystem {
 	return &ControlSystem{
 		droneID:           droneID,
 		sensorAPI:         sensorAPI,
@@ -249,4 +256,25 @@ func (cs *ControlSystem) GetRequestCounters() map[uuid.UUID]int {
 	}
 
 	return counters
+}
+
+// ResetRequestCounter reseta contador para um delta específico
+func (cs *ControlSystem) ResetRequestCounter(deltaID uuid.UUID) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	if _, exists := cs.reqCounters[deltaID]; exists {
+		delete(cs.reqCounters, deltaID)
+		log.Printf("[CONTROL] Resetado contador para delta %s", deltaID.String()[:8])
+	}
+}
+
+// IncrementRequestCounter incrementa contador para um delta
+func (cs *ControlSystem) IncrementRequestCounter(deltaID uuid.UUID) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	cs.reqCounters[deltaID]++
+	log.Printf("[CONTROL] Incrementado contador para delta %s (novo valor: %d)",
+		deltaID.String()[:8], cs.reqCounters[deltaID])
 }

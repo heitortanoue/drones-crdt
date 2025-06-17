@@ -91,6 +91,7 @@ func (nt *NeighborTable) cleanupExpired() {
 		nt.mutex.Lock()
 		now := time.Now()
 
+		// Remove vizinhos que não foram vistos dentro do timeout
 		for key, neighbor := range nt.neighbors {
 			if now.Sub(neighbor.LastSeen) >= nt.timeout {
 				delete(nt.neighbors, key)
@@ -98,15 +99,17 @@ func (nt *NeighborTable) cleanupExpired() {
 		}
 
 		nt.mutex.Unlock()
-	}
+}
 }
 
 // GetStats retorna estatísticas da tabela de vizinhos
 func (nt *NeighborTable) GetStats() map[string]interface{} {
 	active := nt.GetActiveNeighbors()
+	urls := nt.GetNeighborURLs()
 
 	return map[string]interface{}{
 		"neighbors_active": len(active),
+		"neighbor_urls":    urls,
 		"timeout_seconds":  nt.timeout.Seconds(),
 	}
 }

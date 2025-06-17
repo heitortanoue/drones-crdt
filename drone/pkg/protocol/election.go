@@ -16,10 +16,26 @@ const (
 	TransmitterState ElectionState = "TRANSMITTER" // Estado transmissor ativo
 )
 
+// ControlSystemInterface define os métodos necessários do ControlSystem para eleição
+type ControlSystemInterface interface {
+	GetRequestCounters() map[uuid.UUID]int
+	ResetRequestCounter(deltaID uuid.UUID)
+	GetUDPSender() UDPSender
+}
+
+// Adapter para ControlSystem implementar a interface
+type ControlSystemAdapter struct {
+	*ControlSystem
+}
+
+func (csa *ControlSystemAdapter) GetUDPSender() UDPSender {
+	return csa.udpSender
+}
+
 // TransmitterElection gerencia eleição de transmissor greedy (Base para F6)
 type TransmitterElection struct {
 	droneID       string
-	controlSystem *ControlSystem
+	controlSystem ControlSystemInterface
 
 	// Estado atual
 	currentState    ElectionState
@@ -35,6 +51,18 @@ type TransmitterElection struct {
 
 // NewTransmitterElection cria uma nova instância de eleição
 func NewTransmitterElection(droneID string, controlSystem *ControlSystem) *TransmitterElection {
+	return &TransmitterElection{
+		droneID:         droneID,
+		controlSystem:   &ControlSystemAdapter{controlSystem},
+		currentState:    IdleState,
+		stateChanged:    time.Now(),
+		transmitTimeout: 5 * time.Second, // Requisito F6
+		enabled:         true,
+	}
+}
+
+// NewTransmitterElectionWithInterface cria uma nova instância de eleição com interface (para testes)
+func NewTransmitterElectionWithInterface(droneID string, controlSystem ControlSystemInterface) *TransmitterElection {
 	return &TransmitterElection{
 		droneID:         droneID,
 		controlSystem:   controlSystem,
@@ -65,42 +93,56 @@ func (te *TransmitterElection) CheckElection() {
 	// Verifica se algum contador > 0 (Requisito F6)
 	for deltaID, count := range reqCounters {
 		if count > 0 {
-			log.Printf("[ELECTION] %s detectou demanda para delta %s (count=%d)",
+			log.Printf("[ELECTION] %s detectou demanda para delta %s (ReqCtr=%d)",
 				te.droneID, deltaID.String()[:8], count)
 
-			// Inicia processo de transmissão (base para F6)
-			te.becomeTransmitter(deltaID)
-			break // Processa um delta por vez
+			// Inicia processo de transmissão (Requisito F6 completo)
+			te.becomeTransmitter(deltaID, count)
+			break // Processa um delta por vez (greedy)
 		}
 	}
 }
 
 // becomeTransmitter faz transição para estado transmissor
-func (te *TransmitterElection) becomeTransmitter(deltaID uuid.UUID) {
-	log.Printf("[ELECTION] %s tornando-se transmissor para delta %s",
-		te.droneID, deltaID.String()[:8])
+func (te *TransmitterElection) becomeTransmitter(deltaID uuid.UUID, reqCount int) {
+	log.Printf("[ELECTION] %s tornando-se transmissor para delta %s (ReqCtr=%d)",
+		te.droneID, deltaID.String()[:8], reqCount)
 
 	// Atualiza estado
 	te.currentState = TransmitterState
 	te.stateChanged = time.Now()
 
-	// Envia 3x SwitchChannel (Requisito F6)
-	te.sendSwitchChannelMessages(deltaID, 3)
+	// Envia 3x SwitchChannel com ReqCount (Requisito F6)
+	te.sendSwitchChannelMessages(deltaID, reqCount)
 
-	// Agenda retorno ao estado idle após timeout
+	// Reseta contador para este delta
+	te.controlSystem.ResetRequestCounter(deltaID)
+
+	// Agenda retorno ao estado idle após timeout ou outbox vazio
 	go te.scheduleStateTimeout()
 }
 
 // sendSwitchChannelMessages envia múltiplas mensagens SwitchChannel
-func (te *TransmitterElection) sendSwitchChannelMessages(deltaID uuid.UUID, count int) {
-	// Por enquanto, simula o envio
-	// Na implementação completa, usaria o UDP sender
-	for i := 0; i < count; i++ {
-		log.Printf("[ELECTION] %s enviando SwitchChannel #%d para delta %s",
-			te.droneID, i+1, deltaID.String()[:8])
+func (te *TransmitterElection) sendSwitchChannelMessages(deltaID uuid.UUID, reqCount int) {
+	// Envia 3 mensagens SwitchChannel conforme F6
+	for i := 0; i < 3; i++ {
+		switchMsg := SwitchChannelMsg{
+			SenderID: te.droneID,
+			DeltaID:  deltaID,
+			ReqCount: reqCount,
+		}
+
+		// Serializa e envia via UDP
+		if data, err := EncodeMessage("SWITCH_CHANNEL", switchMsg); err == nil {
+			te.controlSystem.GetUDPSender().Broadcast(data)
+			log.Printf("[ELECTION] %s enviou SwitchChannel #%d para delta %s (ReqCtr=%d)",
+				te.droneID, i+1, deltaID.String()[:8], reqCount)
+		} else {
+			log.Printf("[ELECTION] Erro ao enviar SwitchChannel: %v", err)
+		}
 
 		// Pequeno delay entre envios
-		if i < count-1 {
+		if i < 2 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
