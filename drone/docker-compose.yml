@@ -1,0 +1,41 @@
+# Docker Compose para Drone Swarm
+# Fase 1: Estrutura básica preparada para escala
+version: '3.8'
+
+services:
+  drone:
+    build: .
+    command: >
+      /app/drone
+      -id=drone-$${DRONE_ID:-1}
+      -sample-sec=$${SAMPLE_SEC:-10}
+      -fanout=$${FANOUT:-3}
+      -ttl=$${TTL:-4}
+      -bind=0.0.0.0
+    environment:
+      - DRONE_ID=${DRONE_ID:-1}
+      - SAMPLE_SEC=${SAMPLE_SEC:-10}
+      - FANOUT=${FANOUT:-3}
+      - TTL=${TTL:-4}
+    ports:
+      - "${UDP_PORT:-7000}:7000/udp"  # Canal de controle
+      - "${TCP_PORT:-8080}:8080/tcp"  # Canal de dados
+    networks:
+      - drone-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  drone-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# USAGE:
+# docker-compose up --scale drone=5
+# docker-compose down
