@@ -23,7 +23,6 @@ type DroneConfig struct {
 
 	// Timeouts e intervalos
 	NeighborTimeout    time.Duration `json:"neighbor_timeout"`    // timeout para expirar vizinhos (9s)
-	AdvertiseInterval  time.Duration `json:"advertise_interval"`  // intervalo para advertise (3-6s)
 	TransmitterTimeout time.Duration `json:"transmitter_timeout"` // timeout para transmissor (5s)
 }
 
@@ -38,7 +37,6 @@ func DefaultConfig() *DroneConfig {
 		Fanout:             3,
 		TTL:                4,
 		NeighborTimeout:    9 * time.Second,
-		AdvertiseInterval:  5 * time.Second, // média entre 3-6s
 		TransmitterTimeout: 5 * time.Second,
 	}
 }

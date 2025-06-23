@@ -2,16 +2,21 @@ package network
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/heitortanoue/tcc/pkg/protocol"
 )
 
 // Neighbor representa um vizinho descoberto via UDP
 type Neighbor struct {
 	IP       net.IP    `json:"ip"`
+	Port     int       `json:"port"`    // porta TCP para dados
+	ID       string    `json:"id"`      // ID do drone (UUID)
+	Version  int       `json:"version"` // último delta do drone
 	LastSeen time.Time `json:"last_seen"`
-	Port     int       `json:"port"` // porta TCP para dados
 }
 
 // NeighborTable gerencia a tabela de vizinhos descobertos
@@ -35,16 +40,22 @@ func NewNeighborTable(timeout time.Duration) *NeighborTable {
 }
 
 // AddOrUpdate adiciona ou atualiza um vizinho
-func (nt *NeighborTable) AddOrUpdate(ip net.IP, port int) {
+func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, port int) {
 	nt.mutex.Lock()
 	defer nt.mutex.Unlock()
 
-	key := ip.String()
+	key := hello.ID // Usando ID como chave para unicidade
+
 	nt.neighbors[key] = &Neighbor{
 		IP:       ip,
-		LastSeen: time.Now(),
 		Port:     port,
+		ID:       hello.ID,
+		LastSeen: time.Now(),
+		Version:  hello.Version,
 	}
+
+	log.Println("Neighbor added/updated")
+	log.Println(nt.String())
 }
 
 // GetActiveNeighbors retorna vizinhos ativos (não expirados)
@@ -99,7 +110,7 @@ func (nt *NeighborTable) cleanupExpired() {
 		}
 
 		nt.mutex.Unlock()
-}
+	}
 }
 
 // GetStats retorna estatísticas da tabela de vizinhos
@@ -112,4 +123,14 @@ func (nt *NeighborTable) GetStats() map[string]interface{} {
 		"neighbor_urls":    urls,
 		"timeout_seconds":  nt.timeout.Seconds(),
 	}
+}
+
+// String retorna uma representação legível da tabela de vizinhos
+func (nt *NeighborTable) String() string {
+	result := "Neighbor Table:\n"
+	for _, neighbor := range nt.neighbors {
+		result += fmt.Sprintf("IP: %s, Port: %d, ID: %s, Version: %d, LastSeen: %s\n",
+			neighbor.IP.String(), neighbor.Port, neighbor.ID, neighbor.Version, neighbor.LastSeen.Format(time.RFC3339))
+	}
+	return result
 }

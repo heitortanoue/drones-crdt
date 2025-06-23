@@ -62,20 +62,16 @@ func main() {
 
 	// Cria sistema de controle (Fase 3: F3 + base F6)
 	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer)
-	election := protocol.NewTransmitterElection(cfg.DroneID, controlSystem)
 
 	// Cria sistema de disseminação TTL (Fase 4: F4 + F7)
 	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
 	disseminationSystem := gossip.NewDisseminationSystem(cfg.DroneID, cfg.Fanout, cfg.TTL, neighborTable, tcpSender)
 
-	// Integra sistema de controle com UDP server
-	udpServer.SetMessageProcessor(controlSystem)
-
 	// Integra handlers do sensor no TCP server
 	tcpServer.SensorHandler = createSensorHandler(sensorAPI, disseminationSystem)
 	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI, disseminationSystem)
 	tcpServer.StateHandler = createStateHandler(sensorAPI)
-	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, election, disseminationSystem)
+	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, disseminationSystem)
 	tcpServer.CleanupHandler = createCleanupHandler(sensorAPI)
 
 	// Setup graceful shutdown
@@ -169,7 +165,7 @@ ENDPOINTS (TCP):
   POST /neighbor   - Gerencia vizinhos (Fase 1)
 
 PROTOCOLS:
-  - UDP %d: Canal de controle (Advertise/Request/SwitchChannel)
+  - UDP %d: Canal de controle (Hello)
   - TCP %d: Canal de dados (HTTP REST API)
   - Coleta automática de sensores a cada -sample-sec segundos
   - Descoberta de vizinhos via pacotes UDP
@@ -300,7 +296,7 @@ func createStateHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
 }
 
 // createStatsHandler cria handler para GET /stats
-func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, election *protocol.TransmitterElection, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
+func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -310,14 +306,12 @@ func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.Neig
 		sensorStats := sensorAPI.GetStats()
 		neighborStats := neighborTable.GetStats()
 		controlStats := controlSystem.GetStats()
-		electionStats := election.GetStats()
 		disseminationStats := dissemination.GetStats()
 
 		response := map[string]interface{}{
 			"sensor_system": sensorStats,
 			"network":       neighborStats,
 			"control":       controlStats,
-			"election":      electionStats,
 			"dissemination": disseminationStats, // Fase 4: F4 + F7
 			"uptime":        time.Since(startTime).Seconds(),
 		}

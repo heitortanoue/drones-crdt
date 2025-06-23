@@ -132,6 +132,11 @@ func (sa *SensorAPI) CleanupOldData(maxAge time.Duration) int {
 	return sa.deltaSet.CleanupOldDeltas(limitTimestamp)
 }
 
+// GetCurrentVersion retorna a versão atual do drone (número de deltas)
+func (sa *SensorAPI) GetCurrentVersion() int {
+	return sa.deltaSet.Size()
+}
+
 // ApplyDelta aplica um delta individual no CRDT
 func (sa *SensorAPI) ApplyDelta(delta SensorDelta) {
 	sa.deltaSet.Apply(delta)
