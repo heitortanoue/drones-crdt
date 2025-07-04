@@ -1,0 +1,28 @@
+services:
+  drone:
+    build: .
+    entrypoint: /bin/sh -c "exec /app/drone \
+      -id=$(hostname) \
+      -sample-sec=${SAMPLE_SEC:-10} \
+      -fanout=${FANOUT:-3} \
+      -ttl=${TTL:-4} \
+      -bind=0.0.0.0"
+
+    expose:
+      - "7000/udp"
+      - "8080/tcp"
+    networks: [drone-net]
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  drone-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
