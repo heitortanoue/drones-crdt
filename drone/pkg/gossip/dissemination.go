@@ -7,16 +7,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/heitortanoue/tcc/pkg/sensor"
+	"github.com/heitortanoue/tcc/pkg/crdt"
+	"github.com/heitortanoue/tcc/pkg/state"
 )
 
 // DeltaMsg representa uma mensagem de delta com TTL para disseminação
 type DeltaMsg struct {
-	ID        uuid.UUID          `json:"id"`
-	TTL       int                `json:"ttl"`
-	Data      sensor.SensorDelta `json:"data"`
-	SenderID  string             `json:"sender_id"`
-	Timestamp int64              `json:"timestamp"`
+	ID        uuid.UUID      `json:"id"`
+	TTL       int            `json:"ttl"`
+	Data      crdt.FireDelta `json:"data"`
+	SenderID  string         `json:"sender_id"`
+	Timestamp int64          `json:"timestamp"`
 }
 
 // DisseminationSystem gerencia disseminação TTL (Requisito F4)
@@ -76,6 +77,11 @@ func (ds *DisseminationSystem) Start() {
 	}
 
 	ds.running = true
+
+	// inicia heartbeat de push periódico
+	log.Printf("[DISSEMINATION] Iniciando heartbeat para disseminação de delta")
+	go ds.startHeartbeat()
+
 	log.Printf("[DISSEMINATION] Iniciando sistema de disseminação para %s (fanout: %d, TTL: %d)",
 		ds.droneID, ds.fanout, ds.defaultTTL)
 }
@@ -95,7 +101,7 @@ func (ds *DisseminationSystem) Stop() {
 }
 
 // DisseminateDelta dissemina um delta para vizinhos com TTL
-func (ds *DisseminationSystem) DisseminateDelta(delta sensor.SensorDelta) error {
+func (ds *DisseminationSystem) DisseminateDelta(delta crdt.FireDelta) error {
 	ds.mutex.RLock()
 	if !ds.running {
 		ds.mutex.RUnlock()
@@ -105,7 +111,7 @@ func (ds *DisseminationSystem) DisseminateDelta(delta sensor.SensorDelta) error 
 
 	// Cria mensagem com TTL inicial
 	msg := DeltaMsg{
-		ID:        delta.ID,
+		ID:        uuid.New(),
 		TTL:       ds.defaultTTL,
 		Data:      delta,
 		SenderID:  ds.droneID,
@@ -143,6 +149,9 @@ func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 	}
 
 	log.Printf("[DISSEMINATION] Processando delta %s (TTL: %d)", msg.ID.String()[:8], msg.TTL)
+
+	// Aplica o delta recebido ao estado local do drone
+	state.MergeDelta(msg.Data)
 
 	// Decrementa TTL e continua disseminação
 	msg.TTL--
@@ -212,6 +221,36 @@ func selectRandomNeighbors(neighbors []string, count int) []string {
 	}
 
 	return shuffled[:count]
+}
+
+// startHeartbeat dispara periodicamente envio de delta local
+func (ds *DisseminationSystem) startHeartbeat() {
+	ticker := time.NewTicker(5 * time.Second) // intervalo de heartbeat
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			log.Printf("[DISSEMINATION] Iniciando heartbeat para disseminação de delta")
+
+			// extrai delta local do estado do drone
+			delta := state.GenerateDelta()
+			// só envia se houver mudanças pendentes
+			if delta != nil && len(delta.Entries) > 0 {
+				log.Printf("[DISSEMINATION] Gerando delta com %d entradas", len(delta.Entries))
+				err := ds.DisseminateDelta(*delta)
+				if err != nil {
+					log.Printf("[DISSEMINATION] Erro ao disseminar delta: %v", err)
+				} else {
+					// Limpa o delta após disseminação bem-sucedida
+					state.ClearDelta()
+					log.Printf("[DISSEMINATION] Delta disseminado com %d entradas", len(delta.Entries))
+				}
+			}
+		case <-ds.stopCh:
+			return
+		}
+	}
 }
 
 // GetStats retorna estatísticas do sistema de disseminação

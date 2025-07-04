@@ -122,19 +122,14 @@ func (s *UDPServer) handleIncomingPackets() {
 
 // processPacket processa um pacote UDP específico
 func (s *UDPServer) processPacket(data []byte, addr *net.UDPAddr) {
-	log.Printf("[UDP] Processando pacote de %s:%d (%d bytes)", addr.IP.String(), addr.Port, len(data))
-
 	// Processa mensagem HELLO
 	var helloMsg = protocol.HelloMessage{}
 
 	if err := json.Unmarshal(data, &helloMsg); err == nil && helloMsg.ID != "" {
-		log.Printf("[UDP] Mensagem HELLO recebida de %s: ID=%s, Version=%d",
-			addr.IP.String(), helloMsg.ID, helloMsg.Version)
-
 		// Atualiza neighborTable com informações da mensagem HELLO
-		s.neighborTable.AddOrUpdate(helloMsg, addr.IP, addr.Port)
-		log.Printf("[UDP] Vizinho descoberto via HELLO: %s (TCP:8080, Version:%d)",
-			addr.IP.String(), helloMsg.Version)
+		s.neighborTable.AddOrUpdate(helloMsg, addr.IP, 8080) // Porta TCP fixa 8080
+		log.Printf("[UDP] Vizinho descoberto via HELLO: %s (TCP:8080)",
+			addr.IP.String())
 		return
 	}
 
@@ -194,8 +189,6 @@ func (s *UDPServer) Multicast(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("falha no envio multicast: %v", err)
 	}
-
-	log.Printf("[UDP] Multicast enviado (%d bytes)", len(data))
 	return nil
 }
 

@@ -1,143 +1,118 @@
 package sensor
 
 import (
+	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-// SensorReading representa uma leitura de sensor para entrada de API
-type SensorReading struct {
-	SensorID  string  `json:"sensor_id"`
-	Timestamp int64   `json:"timestamp"`
-	Value     float64 `json:"value"`
+// FireReading representa uma leitura de detecção de incêndio
+type FireReading struct {
+	X          int     `json:"x"`          // Coordenada X da célula
+	Y          int     `json:"y"`          // Coordenada Y da célula
+	Confidence float64 `json:"confidence"` // Nível de confiança (0-100%)
+	Timestamp  int64   `json:"timestamp"`  // Timestamp em milissegundos
+	SensorID   string  `json:"sensor_id"`  // ID do sensor que fez a leitura
 }
 
-// DeltaBatch representa um lote de deltas para transmissão
-type DeltaBatch struct {
-	SenderID string        `json:"sender_id"` // ID do drone que envia
-	Deltas   []SensorDelta `json:"deltas"`    // Array de deltas
+// FireSensor representa um sensor simples que coleta leituras
+type FireSensor struct {
+	readings  []FireReading        // Lista de leituras acumuladas
+	generator *FireSensorGenerator // Gerador automático
+	sensorID  string               // ID único do sensor
+	mutex     sync.RWMutex         // Proteção para concorrência
 }
 
-// SensorAPI representa a interface principal para o sistema de sensores
-type SensorAPI struct {
-	deltaSet  *DeltaSet
-	generator *SensorGenerator
-	droneID   string
-}
+// NewFireSensor cria uma nova instância do sensor de incêndio
+func NewFireSensor(sensorID string, sampleInterval time.Duration) *FireSensor {
+	generator := NewFireSensorGenerator(sensorID, sampleInterval)
 
-// NewSensorAPI cria uma nova instância da API de sensores
-func NewSensorAPI(droneID string, sampleInterval time.Duration) *SensorAPI {
-	deltaSet := NewDeltaSet()
-	generator := NewSensorGenerator(droneID, deltaSet, sampleInterval)
-
-	return &SensorAPI{
-		deltaSet:  deltaSet,
+	sensor := &FireSensor{
+		readings:  make([]FireReading, 0),
 		generator: generator,
-		droneID:   droneID,
+		sensorID:  sensorID,
 	}
+
+	// Configura a referência circular para o gerador
+	generator.SetSensor(sensor)
+
+	return sensor
 }
 
 // Start inicia a coleta automática de dados
-func (sa *SensorAPI) Start() {
-	sa.generator.Start()
+func (fs *FireSensor) Start() {
+	fs.generator.Start()
 }
 
 // Stop para a coleta automática
-func (sa *SensorAPI) Stop() {
-	sa.generator.Stop()
+func (fs *FireSensor) Stop() {
+	fs.generator.Stop()
 }
 
-// AddManualReading adiciona uma leitura manual via API
-func (sa *SensorAPI) AddManualReading(reading SensorReading) SensorDelta {
-	delta := SensorDelta{
-		ID:        uuid.New(),
-		SensorID:  reading.SensorID,
-		Timestamp: reading.Timestamp,
-		Value:     reading.Value,
-		DroneID:   sa.droneID,
+// AddReading adiciona uma leitura à lista (usado pelo gerador e manualmente)
+func (fs *FireSensor) AddReading(reading FireReading) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+
+	// Adiciona o ID do sensor se não estiver definido
+	if reading.SensorID == "" {
+		reading.SensorID = fs.sensorID
 	}
 
-	sa.deltaSet.Add(delta)
-	return delta
+	fs.readings = append(fs.readings, reading)
 }
 
-// GetDeltaSet retorna referência para o DeltaSet
-func (sa *SensorAPI) GetDeltaSet() *DeltaSet {
-	return sa.deltaSet
-}
-
-// GetGenerator retorna referência para o Generator
-func (sa *SensorAPI) GetGenerator() *SensorGenerator {
-	return sa.generator
-}
-
-// GetState retorna todos os deltas atuais
-func (sa *SensorAPI) GetState() []SensorDelta {
-	return sa.deltaSet.GetAll()
-}
-
-// GetLatestReadings retorna as leituras mais recentes por sensor
-func (sa *SensorAPI) GetLatestReadings() map[string]SensorDelta {
-	return sa.deltaSet.GetLatestBySensor()
-}
-
-// MergeBatch aplica um lote de deltas de outro drone
-func (sa *SensorAPI) MergeBatch(batch DeltaBatch) int {
-	mergedCount := 0
-	for _, delta := range batch.Deltas {
-		if sa.deltaSet.Apply(delta) {
-			mergedCount++
-		}
+// AddManualReading adiciona uma leitura manual (mais para testes)
+func (fs *FireSensor) AddManualReading(x, y int, confidence float64) {
+	reading := FireReading{
+		X:          x,
+		Y:          y,
+		Confidence: confidence,
+		Timestamp:  GenerateTimestamp(),
+		SensorID:   fs.sensorID,
 	}
-	return mergedCount
+	fs.AddReading(reading)
 }
 
-// GetMissingDeltas retorna IDs de deltas que não possuímos
-func (sa *SensorAPI) GetMissingDeltas(haveIDs []uuid.UUID) []uuid.UUID {
-	return sa.deltaSet.GetMissingIDs(haveIDs)
+// GetReadings retorna todas as leituras acumuladas
+func (fs *FireSensor) GetReadings() []FireReading {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
+	// Retorna uma cópia para evitar modificações concorrentes
+	readings := make([]FireReading, len(fs.readings))
+	copy(readings, fs.readings)
+	return readings
 }
 
-// GetDeltasByIDs retorna deltas específicos por seus IDs
-func (sa *SensorAPI) GetDeltasByIDs(ids []uuid.UUID) []SensorDelta {
-	return sa.deltaSet.GetByIDs(ids)
+// GetAndClearReadings retorna todas as leituras e limpa a lista (para envio ao drone)
+func (fs *FireSensor) GetAndClearReadings() []FireReading {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+
+	// Copia as leituras
+	readings := make([]FireReading, len(fs.readings))
+	copy(readings, fs.readings)
+
+	// Limpa a lista
+	fs.readings = fs.readings[:0]
+
+	return readings
 }
 
-// GetAllDeltaIDs retorna todos os IDs de deltas que possuímos
-func (sa *SensorAPI) GetAllDeltaIDs() []uuid.UUID {
-	return sa.deltaSet.GetAllIDs()
-}
-
-// GetStats retorna estatísticas completas do sistema de sensores
-func (sa *SensorAPI) GetStats() map[string]interface{} {
-	deltaStats := sa.deltaSet.GetStats()
-	generatorStats := sa.generator.GetStats()
+// GetStats retorna estatísticas do sensor
+func (fs *FireSensor) GetStats() map[string]interface{} {
+	fs.mutex.RLock()
+	readingCount := len(fs.readings)
+	fs.mutex.RUnlock()
 
 	return map[string]interface{}{
-		"drone_id":       sa.droneID,
-		"delta_set":      deltaStats,
-		"generator":      generatorStats,
-		"latest_sensors": len(sa.GetLatestReadings()),
+		"sensor_id":     fs.sensorID,
+		"reading_count": readingCount,
+		"generator":     fs.generator.GetStats(),
 	}
 }
 
 // GenerateTimestamp cria um timestamp atual em milissegundos
 func GenerateTimestamp() int64 {
 	return time.Now().UnixMilli()
-}
-
-// CleanupOldData remove dados antigos baseado na idade
-func (sa *SensorAPI) CleanupOldData(maxAge time.Duration) int {
-	limitTimestamp := time.Now().Add(-maxAge).UnixMilli()
-	return sa.deltaSet.CleanupOldDeltas(limitTimestamp)
-}
-
-// GetCurrentVersion retorna a versão atual do drone (número de deltas)
-func (sa *SensorAPI) GetCurrentVersion() int {
-	return sa.deltaSet.Size()
-}
-
-// ApplyDelta aplica um delta individual no CRDT
-func (sa *SensorAPI) ApplyDelta(delta SensorDelta) {
-	sa.deltaSet.Apply(delta)
 }

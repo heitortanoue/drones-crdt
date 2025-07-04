@@ -1,135 +1,166 @@
 package sensor
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"time"
+
+	"github.com/heitortanoue/tcc/pkg/crdt"
+	"github.com/heitortanoue/tcc/pkg/state"
 )
 
-// SensorGenerator gera leituras automáticas de sensor (Requisito F1)
-type SensorGenerator struct {
-	droneID     string
-	deltaSet    *DeltaSet
-	interval    time.Duration
-	running     bool
-	stopCh      chan struct{}
-	sensorAreas []string // Áreas de sensores simuladas
+// FireSensorGenerator gera leituras automáticas de detecção de incêndio
+type FireSensorGenerator struct {
+	sensorID string
+	sensor   *FireSensor // Referência para o sensor que receberá as leituras
+	interval time.Duration
+	running  bool
+	stopCh   chan struct{}
+	gridSize int // Tamanho da grade de cobertura (ex: 10x10)
+	baseX    int // Coordenada X base para este sensor
+	baseY    int // Coordenada Y base para este sensor
 }
 
-// NewSensorGenerator cria um novo gerador de leituras automáticas
-func NewSensorGenerator(droneID string, deltaSet *DeltaSet, interval time.Duration) *SensorGenerator {
-	// Define áreas de sensores simuladas para este drone
-	areas := []string{
-		fmt.Sprintf("area-%s-A", droneID),
-		fmt.Sprintf("area-%s-B", droneID),
-		fmt.Sprintf("area-%s-C", droneID),
-	}
+// NewFireSensorGenerator cria um novo gerador de detecções de incêndio
+func NewFireSensorGenerator(sensorID string, interval time.Duration) *FireSensorGenerator {
+	// Cada sensor cobre uma área específica da grade
+	hash := hashString(sensorID)
+	gridSize := 10
+	baseX := (hash % 5) * gridSize       // 5 regiões horizontais
+	baseY := ((hash / 5) % 5) * gridSize // 5 regiões verticais
 
-	return &SensorGenerator{
-		droneID:     droneID,
-		deltaSet:    deltaSet,
-		interval:    interval,
-		running:     false,
-		stopCh:      make(chan struct{}),
-		sensorAreas: areas,
+	return &FireSensorGenerator{
+		sensorID: sensorID,
+		interval: interval,
+		running:  false,
+		stopCh:   make(chan struct{}),
+		gridSize: gridSize,
+		baseX:    baseX,
+		baseY:    baseY,
 	}
 }
 
-// Start inicia a geração automática de leituras (Requisito F1)
-func (sg *SensorGenerator) Start() {
-	if sg.running {
+// SetSensor define a referência do sensor para receber as leituras
+func (fsg *FireSensorGenerator) SetSensor(sensor *FireSensor) {
+	fsg.sensor = sensor
+}
+
+// Start inicia a geração automática de detecções de incêndio
+func (fsg *FireSensorGenerator) Start() {
+	if fsg.running {
 		return
 	}
 
-	sg.running = true
-	log.Printf("[GENERATOR] Iniciando coleta automática para %s (intervalo: %v)", sg.droneID, sg.interval)
+	fsg.running = true
+	log.Printf("[FIRE-GENERATOR] Iniciando detecção automática para %s (intervalo: %v)", fsg.sensorID, fsg.interval)
 
-	go sg.generateLoop()
+	go fsg.generateLoop()
 }
 
 // Stop para a geração automática
-func (sg *SensorGenerator) Stop() {
-	if !sg.running {
+func (fsg *FireSensorGenerator) Stop() {
+	if !fsg.running {
 		return
 	}
 
-	sg.running = false
-	close(sg.stopCh)
-	log.Printf("[GENERATOR] Parando coleta automática para %s", sg.droneID)
+	fsg.running = false
+	close(fsg.stopCh)
+	log.Printf("[FIRE-GENERATOR] Parando detecção automática para %s", fsg.sensorID)
 }
 
 // generateLoop executa o loop principal de geração
-func (sg *SensorGenerator) generateLoop() {
-	ticker := time.NewTicker(sg.interval)
+func (fsg *FireSensorGenerator) generateLoop() {
+	ticker := time.NewTicker(fsg.interval)
 	defer ticker.Stop()
 
-	// Gera uma leitura inicial imediatamente
-	sg.generateReading()
+	// Gera uma detecção inicial imediatamente
+	fsg.generateDetection()
 
 	for {
 		select {
 		case <-ticker.C:
-			sg.generateReading()
-		case <-sg.stopCh:
-			log.Printf("[GENERATOR] Loop de geração finalizado para %s", sg.droneID)
+			fsg.generateDetection()
+		case <-fsg.stopCh:
+			log.Printf("[FIRE-GENERATOR] Loop de detecção finalizado para %s", fsg.sensorID)
 			return
 		}
 	}
 }
 
-// generateReading gera uma leitura simulada de sensor
-func (sg *SensorGenerator) generateReading() {
-	// Seleciona aleatoriamente uma área de sensor
-	sensorID := sg.sensorAreas[rand.Intn(len(sg.sensorAreas))]
-
-	// Gera valor simulado de umidade (0-100%)
-	// Adiciona variação baseada no tempo para simular mudanças realistas
-	baseValue := 40.0 + 30.0*rand.Float64()        // 40-70% base
-	timeVariation := 10.0 * (0.5 - rand.Float64()) // ±5% variação
-	value := baseValue + timeVariation
-
-	// Garante que está no range válido
-	if value < 0 {
-		value = 0
-	} else if value > 100 {
-		value = 100
+// generateDetection gera uma detecção simulada de incêndio
+func (fsg *FireSensorGenerator) generateDetection() {
+	if fsg.sensor == nil {
+		return // Sem sensor configurado
 	}
 
-	// Cria e adiciona o delta
-	delta := NewSensorDelta(sg.droneID, sensorID, value)
-	sg.deltaSet.Add(delta)
+	// Gera coordenadas aleatórias dentro da área do sensor
+	x := fsg.baseX + rand.Intn(fsg.gridSize)
+	y := fsg.baseY + rand.Intn(fsg.gridSize)
 
-	log.Printf("[GENERATOR] %s gerou leitura: %s=%.2f%% (ID: %s)",
-		sg.droneID, sensorID, value, delta.ID.String()[:8])
-}
-
-// GetStats retorna estatísticas do gerador
-func (sg *SensorGenerator) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"drone_id":     sg.droneID,
-		"running":      sg.running,
-		"interval_sec": sg.interval.Seconds(),
-		"sensor_areas": sg.sensorAreas,
-		"total_areas":  len(sg.sensorAreas),
+	// Gera nível de confiança (mais provável de ser baixo, ocasionalmente alto)
+	var confidence float64
+	if rand.Float64() < 0.1 { // 10% chance de detecção de alta confiança
+		confidence = 70.0 + rand.Float64()*30.0 // 70-100%
+	} else { // 90% chance de detecção de baixa confiança
+		confidence = 10.0 + rand.Float64()*40.0 // 10-50%
 	}
+
+	// Cria a leitura
+	reading := FireReading{
+		X:          x,
+		Y:          y,
+		Confidence: confidence,
+		Timestamp:  time.Now().UnixMilli(),
+		SensorID:   fsg.sensorID,
+	}
+
+	// Adiciona ao sensor (lista interna)
+	fsg.sensor.AddReading(reading)
+
+	// Adiciona ao estado global para disseminação
+	var cell crdt.Cell
+	cell.X = reading.X
+	cell.Y = reading.Y
+	var meta crdt.FireMeta
+	meta.Timestamp = reading.Timestamp
+	meta.Confidence = reading.Confidence
+
+	state.AddFire(cell, meta)
+
+	log.Printf("[FIRE-GENERATOR] %s detectou: (%d,%d) confiança=%.1f%% - adicionado ao estado global",
+		fsg.sensorID, x, y, confidence)
 }
 
 // SetInterval atualiza o intervalo de geração
-func (sg *SensorGenerator) SetInterval(interval time.Duration) {
-	sg.interval = interval
-	log.Printf("[GENERATOR] Intervalo atualizado para %s: %v", sg.droneID, interval)
+func (fsg *FireSensorGenerator) SetInterval(interval time.Duration) {
+	fsg.interval = interval
+	log.Printf("[FIRE-GENERATOR] Intervalo atualizado para %s: %v", fsg.sensorID, interval)
 }
 
-// AddSensorArea adiciona uma nova área de sensor
-func (sg *SensorGenerator) AddSensorArea(area string) {
-	sg.sensorAreas = append(sg.sensorAreas, area)
-	log.Printf("[GENERATOR] Nova área adicionada para %s: %s", sg.droneID, area)
+// GetStats retorna estatísticas do gerador
+func (fsg *FireSensorGenerator) GetStats() map[string]interface{} {
+	return map[string]interface{}{
+		"sensor_id":    fsg.sensorID,
+		"running":      fsg.running,
+		"interval_sec": fsg.interval.Seconds(),
+		"grid_size":    fsg.gridSize,
+		"base_x":       fsg.baseX,
+		"base_y":       fsg.baseY,
+		"coverage_area": map[string]interface{}{
+			"x_range": []int{fsg.baseX, fsg.baseX + fsg.gridSize - 1},
+			"y_range": []int{fsg.baseY, fsg.baseY + fsg.gridSize - 1},
+		},
+	}
 }
 
-// GetSensorAreas retorna as áreas de sensores configuradas
-func (sg *SensorGenerator) GetSensorAreas() []string {
-	areas := make([]string, len(sg.sensorAreas))
-	copy(areas, sg.sensorAreas)
-	return areas
+// hashString cria um hash simples de uma string para distribuição
+func hashString(s string) int {
+	hash := 0
+	for _, char := range s {
+		hash = (hash*31 + int(char)) % 1000
+	}
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash
 }

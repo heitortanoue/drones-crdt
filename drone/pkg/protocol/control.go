@@ -6,17 +6,14 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-)
 
-// SensorAPIInterface define os métodos necessários da SensorAPI para o ControlSystem
-type SensorAPIInterface interface {
-	GetCurrentVersion() int
-}
+	"github.com/heitortanoue/tcc/pkg/sensor"
+)
 
 // ControlSystem gerencia o envio de mensagens HELLO
 type ControlSystem struct {
 	droneID   string
-	sensorAPI SensorAPIInterface
+	sensorAPI *sensor.FireSensor
 	udpSender UDPSender
 
 	// Controle de execução
@@ -32,7 +29,7 @@ type UDPSender interface {
 }
 
 // NewControlSystem cria um novo sistema de controle
-func NewControlSystem(droneID string, sensorAPI SensorAPIInterface, udpSender UDPSender) *ControlSystem {
+func NewControlSystem(droneID string, sensorAPI *sensor.FireSensor, udpSender UDPSender) *ControlSystem {
 	return &ControlSystem{
 		droneID:   droneID,
 		sensorAPI: sensorAPI,
@@ -92,7 +89,6 @@ func (cs *ControlSystem) sendHello() {
 	// Cria mensagem HELLO
 	msg := HelloMessage{
 		ID:        cs.droneID,
-		Version:   cs.sensorAPI.GetCurrentVersion(),
 	}
 
 	// Serializa para JSON
@@ -105,7 +101,7 @@ func (cs *ControlSystem) sendHello() {
 	// Broadcast via UDP
 	cs.udpSender.Broadcast(data)
 
-	log.Printf("[CONTROL] %s enviou HELLO (version: %d)", cs.droneID, msg.Version)
+	log.Printf("[CONTROL] %s enviou HELLO", cs.droneID)
 }
 
 // ProcessMessage processa mensagem de controle recebida (placeholder para futuro)

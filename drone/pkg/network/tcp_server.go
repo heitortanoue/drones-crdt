@@ -47,7 +47,6 @@ func (s *TCPServer) setupRoutes() {
 	s.mux.HandleFunc("/delta", s.handleDeltaWrapper)
 	s.mux.HandleFunc("/state", s.handleStateWrapper)
 	s.mux.HandleFunc("/stats", s.handleStatsWrapper)
-	s.mux.HandleFunc("/cleanup", s.handleCleanupWrapper)
 }
 
 // Start inicia o servidor TCP
@@ -58,6 +57,7 @@ func (s *TCPServer) Start() error {
 
 // Stop para o servidor TCP
 func (s *TCPServer) Stop() error {
+	log.Printf("[TCP] Parando servidor na porta %d", s.port)
 	return s.server.Close()
 }
 
@@ -103,14 +103,6 @@ func (s *TCPServer) handleStatsWrapper(w http.ResponseWriter, r *http.Request) {
 		s.StatsHandler(w, r)
 	} else {
 		s.sendNotImplemented(w, "Stats handler")
-	}
-}
-
-func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request) {
-	if s.CleanupHandler != nil {
-		s.CleanupHandler(w, r)
-	} else {
-		s.sendNotImplemented(w, "Cleanup handler")
 	}
 }
 

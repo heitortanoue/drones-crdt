@@ -51,7 +51,6 @@ func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, por
 		Port:     port,
 		ID:       hello.ID,
 		LastSeen: time.Now(),
-		Version:  hello.Version,
 	}
 
 	log.Println("Neighbor added/updated")

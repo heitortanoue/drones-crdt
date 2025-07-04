@@ -20,20 +20,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # opcional: agregador para /stats (mostrado anteriormente)
-  aggregator:
-    image: curlimages/curl:8.8.0
-    networks: [drone-net]
-    entrypoint: |
-      sh -c '
-        while true; do
-          for h in $$(getent hosts | awk "/drone_/ {print \$2}"); do
-            echo "== $$h ==";
-            curl -s http://$$h:8080/stats || echo "(offline)";
-          done;
-          sleep ${INTERVAL_SEC:-15};
-        done'
-
 networks:
   drone-net:
     driver: bridge

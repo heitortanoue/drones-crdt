@@ -8,15 +8,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/heitortanoue/tcc/internal/config"
+	"github.com/heitortanoue/tcc/pkg/crdt"
 	"github.com/heitortanoue/tcc/pkg/gossip"
 	"github.com/heitortanoue/tcc/pkg/network"
 	"github.com/heitortanoue/tcc/pkg/protocol"
 	"github.com/heitortanoue/tcc/pkg/sensor"
+	"github.com/heitortanoue/tcc/pkg/state"
 )
 
 var startTime = time.Now() // Para cálculo de uptime
@@ -53,8 +54,11 @@ func main() {
 	// Cria tabela de vizinhos
 	neighborTable := network.NewNeighborTable(cfg.NeighborTimeout)
 
+	// Inicia estado global
+	state.InitGlobalState(cfg.DroneID)
+
 	// Cria sistema de sensores (Fase 2: F1 + F2)
-	sensorAPI := sensor.NewSensorAPI(cfg.DroneID, cfg.SampleInterval)
+	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval)
 
 	// Cria servidores UDP e TCP
 	udpServer := network.NewUDPServer(cfg.DroneID, cfg.UDPPort, neighborTable)
@@ -63,7 +67,7 @@ func main() {
 	// Cria sistema de controle (Fase 3: F3 + base F6)
 	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer)
 
-	// Cria sistema de disseminação TTL (Fase 4: F4 + F7)
+	// Cria sistema de disseminação TTL
 	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
 	disseminationSystem := gossip.NewDisseminationSystem(cfg.DroneID, cfg.Fanout, cfg.TTL, neighborTable, tcpSender)
 
@@ -72,7 +76,6 @@ func main() {
 	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI, disseminationSystem)
 	tcpServer.StateHandler = createStateHandler(sensorAPI)
 	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, disseminationSystem)
-	tcpServer.CleanupHandler = createCleanupHandler(sensorAPI)
 
 	// Setup graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -161,7 +164,6 @@ ENDPOINTS (TCP):
   POST /delta      - Recebe deltas de outros drones (Fase 2)
   GET  /state      - Estado atual do CRDT (Fase 2)
   GET  /stats      - Estatísticas do drone (Fase 5)
-  POST /cleanup    - Limpa deltas antigos (Fase 2)
   POST /neighbor   - Gerencia vizinhos (Fase 1)
 
 PROTOCOLS:
@@ -170,57 +172,53 @@ PROTOCOLS:
   - Coleta automática de sensores a cada -sample-sec segundos
   - Descoberta de vizinhos via pacotes UDP
   - TTL gossip com fan-out configurável
-
-NOTES:
-  - Fase 1: Estrutura básica sem SWIM
-  - Próximas fases: CRDT, protocolos de controle, gossip, métricas
-  - Binário único sem dependências externas pesadas
-
 `, 7000, 8080)
 }
 
 // Handlers HTTP para integração com sistema de sensores
 
 // createSensorHandler cria handler para POST /sensor
-func createSensorHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
+//  O sensor vai enviar dados por aqui para o drone processar
+func createSensorHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 			return
 		}
 
-		var reading sensor.SensorReading
+		var reading sensor.FireReading
 		if err := json.NewDecoder(r.Body).Decode(&reading); err != nil {
 			http.Error(w, "JSON inválido", http.StatusBadRequest)
 			return
 		}
 
-		// Se timestamp não fornecido, usa atual
-		if reading.Timestamp == 0 {
-			reading.Timestamp = sensor.GenerateTimestamp()
-		}
+		var cell crdt.Cell
+		cell.X = reading.X
+		cell.Y = reading.Y
+		var meta crdt.FireMeta
+		meta.Timestamp = reading.Timestamp
+		meta.Confidence = reading.Confidence
 
-		delta := sensorAPI.AddManualReading(reading)
+		// Adiciona a leitura ao estado do drone
+		state.AddFire(cell, meta)
 
-		// Dissemina delta via gossip TTL (Fase 4: F4)
-		if dissemination.IsRunning() {
-			if err := dissemination.DisseminateDelta(delta); err != nil {
-				log.Printf("[MAIN] Erro ao disseminar delta %s: %v", delta.ID.String()[:8], err)
-			}
-		}
+		// if dissemination.IsRunning() {
+		// 	if err := dissemination.DisseminateDelta(delta); err != nil {
+		// 		log.Printf("[MAIN] Erro ao disseminar delta %s: %v", delta.ID.String()[:8], err)
+		// 	}
+		// }
 
 		response := map[string]interface{}{
-			"delta":   delta,
 			"message": "Leitura adicionada com sucesso",
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
 }
 
 // createDeltaHandler cria handler para POST /delta
-func createDeltaHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
+// Este handler recebe deltas de outros drones e integra no CRDT local
+func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -229,42 +227,26 @@ func createDeltaHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.Disse
 
 		// Tenta decodificar como DeltaMsg da disseminação (Fase 4)
 		var deltaMsg gossip.DeltaMsg
-		if err := json.NewDecoder(r.Body).Decode(&deltaMsg); err == nil {
-			// Processa delta recebido via gossip
-			if dissemination.IsRunning() {
-				if err := dissemination.ProcessReceivedDelta(deltaMsg); err != nil {
-					log.Printf("[MAIN] Erro ao processar delta recebido: %v", err)
-				}
-			}
-
-			// Integra no CRDT local
-			sensorAPI.ApplyDelta(deltaMsg.Data)
-
-			response := map[string]interface{}{
-				"status":    "received",
-				"delta_id":  deltaMsg.ID,
-				"ttl":       deltaMsg.TTL,
-				"sender_id": deltaMsg.SenderID,
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		// Fallback para formato legado (DeltaBatch)
-		var batch sensor.DeltaBatch
-		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&deltaMsg); err != nil {
 			http.Error(w, "JSON inválido", http.StatusBadRequest)
 			return
 		}
 
-		mergedCount := sensorAPI.MergeBatch(batch)
+		// Processa delta recebido via gossip
+		if dissemination.IsRunning() {
+			if err := dissemination.ProcessReceivedDelta(deltaMsg); err != nil {
+				log.Printf("[MAIN] Erro ao processar delta recebido: %v", err)
+			}
+		}
+
+		// Integra no CRDT local
+		state.MergeDelta(deltaMsg.Data)
 
 		response := map[string]interface{}{
-			"merged_count": mergedCount,
-			"sender_id":    batch.SenderID,
-			"total_deltas": len(batch.Deltas),
+			"status":    "received",
+			"delta_id":  deltaMsg.ID,
+			"ttl":       deltaMsg.TTL,
+			"sender_id": deltaMsg.SenderID,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -273,20 +255,20 @@ func createDeltaHandler(sensorAPI *sensor.SensorAPI, dissemination *gossip.Disse
 }
 
 // createStateHandler cria handler para GET /state
-func createStateHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
+func createStateHandler(sensorAPI *sensor.FireSensor) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 			return
 		}
 
-		state := sensorAPI.GetState()
-		latest := sensorAPI.GetLatestReadings()
+		droneState := state.GetActiveFires()
+		latest := state.GetLatestReadings()
 
 		response := map[string]interface{}{
-			"all_deltas":      state,
+			"all_deltas":      droneState,
 			"latest_readings": latest,
-			"total_deltas":    len(state),
+			"total_deltas":    len(droneState),
 			"unique_sensors":  len(latest),
 		}
 
@@ -296,7 +278,7 @@ func createStateHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
 }
 
 // createStatsHandler cria handler para GET /stats
-func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
+func createStatsHandler(sensorAPI *sensor.FireSensor, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
@@ -312,38 +294,8 @@ func createStatsHandler(sensorAPI *sensor.SensorAPI, neighborTable *network.Neig
 			"sensor_system": sensorStats,
 			"network":       neighborStats,
 			"control":       controlStats,
-			"dissemination": disseminationStats, // Fase 4: F4 + F7
+			"dissemination": disseminationStats,
 			"uptime":        time.Since(startTime).Seconds(),
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}
-}
-
-// createCleanupHandler cria handler para POST /cleanup
-func createCleanupHandler(sensorAPI *sensor.SensorAPI) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Limpa dados mais antigos que 1 hora por padrão
-		maxAge := time.Hour
-
-		// Permite configurar via query parameter
-		if ageParam := r.URL.Query().Get("max_age_minutes"); ageParam != "" {
-			if minutes, err := strconv.Atoi(ageParam); err == nil && minutes > 0 {
-				maxAge = time.Duration(minutes) * time.Minute
-			}
-		}
-
-		removedCount := sensorAPI.CleanupOldData(maxAge)
-
-		response := map[string]interface{}{
-			"removed_count": removedCount,
-			"max_age":       maxAge.String(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
