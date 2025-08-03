@@ -7,76 +7,91 @@ import (
 	"github.com/heitortanoue/tcc/pkg/crdt"
 )
 
-func TestDroneStateBasic(t *testing.T) {
-	// Cria estado do drone
+func TestProcessFireReading_HighConfidenceHighTemperature_InsertsFire(t *testing.T) {
 	ds := NewDroneState("drone1")
-
-	// Adiciona um fogo
-	cell := crdt.Cell{X: 10, Y: 20}
+	cell := crdt.Cell{X: 1, Y: 2}
 	meta := crdt.FireMeta{
-		Timestamp:  time.Now().UnixMilli(),
-		Confidence: 0.9,
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  60.0,  // acima do limiar de 50.0
+		Temperature: 50.0,  // acima do limiar de 45.0
 	}
 
-	ds.AddFire(cell, meta)
+	ds.ProcessFireReading(cell, meta)
 
-	// Verifica se foi adicionado
 	fires := ds.GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo, encontrado %d", len(fires))
+		t.Errorf("Esperado 1 fogo inserido, encontrado %d", len(fires))
 	}
-
 	if fires[0] != cell {
-		t.Errorf("Célula não corresponde: esperado %+v, encontrado %+v", cell, fires[0])
-	}
-
-	// Verifica metadados
-	storedMeta, exists := ds.GetFireMeta(cell)
-	if !exists {
-		t.Error("Metadados não encontrados")
-	}
-
-	if storedMeta.Confidence != meta.Confidence {
-		t.Errorf("Confiança não corresponde: esperado %f, encontrado %f",
-			meta.Confidence, storedMeta.Confidence)
+		t.Errorf("Célula inserida não corresponde: esperado %+v, encontrado %+v", cell, fires[0])
 	}
 }
 
-func TestMergeDelta(t *testing.T) {
-	// Cria estado do drone
+func TestProcessFireReading_HighConfidenceLowTemperature_RemovesFire(t *testing.T) {
 	ds := NewDroneState("drone1")
+	cell := crdt.Cell{X: 3, Y: 4}
+	// pré-popula o estado com um fogo para testar remoção
+	ds.AddFire(cell, crdt.FireMeta{
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  60.0,
+		Temperature: 100.0,
+	})
 
-	// Cria um delta simulado
-	delta := crdt.FireDelta{
-		Context: crdt.DotContext{
-			Clock:    make(crdt.VectorClock),
-			DotCloud: make(crdt.DotCloud),
-		},
-		Entries: []crdt.FireDeltaEntry{
-			{
-				Dot:  crdt.Dot{NodeID: "drone2", Counter: 1},
-				Cell: crdt.Cell{X: 15, Y: 25},
-				Meta: crdt.FireMeta{
-					Timestamp:  time.Now().UnixMilli(),
-					Confidence: 0.8,
-				},
-			},
-		},
+	meta := crdt.FireMeta{
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  60.0,  // acima do limiar de 50.0
+		Temperature: 40.0,  // abaixo do limiar de 45.0
 	}
 
-	// Aplica o delta
-	ds.MergeDelta(delta)
+	ds.ProcessFireReading(cell, meta)
 
-	// Verifica se foi aplicado
+	fires := ds.GetActiveFires()
+	if len(fires) != 0 {
+		t.Errorf("Esperado 0 fogos após remoção, encontrado %d", len(fires))
+	}
+}
+
+func TestProcessFireReading_LowConfidence_IgnoredWhenNoPriorFire(t *testing.T) {
+	ds := NewDroneState("drone1")
+	cell := crdt.Cell{X: 5, Y: 6}
+	meta := crdt.FireMeta{
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  10.0,  // abaixo do limiar de 50.0
+		Temperature: 100.0, // mesmo assim alta temperatura, mas deve ser ignorado
+	}
+
+	ds.ProcessFireReading(cell, meta)
+
+	fires := ds.GetActiveFires()
+	if len(fires) != 0 {
+		t.Errorf("Esperado 0 fogos (baixa confiança), encontrado %d", len(fires))
+	}
+}
+
+func TestProcessFireReading_LowConfidence_DoesNotRemoveExistingFire(t *testing.T) {
+	ds := NewDroneState("drone1")
+	cell := crdt.Cell{X: 7, Y: 8}
+	// pré-popula com fogo
+	ds.AddFire(cell, crdt.FireMeta{
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  60.0,
+		Temperature: 100.0,
+	})
+
+	meta := crdt.FireMeta{
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  10.0, // baixa confiança
+		Temperature: 20.0, // temperatura baixa, mas leitura deve ser ignorada
+	}
+
+	ds.ProcessFireReading(cell, meta)
+
 	fires := ds.GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo após aplicar delta, encontrado %d", len(fires))
+		t.Errorf("Esperado 1 fogo (baixa confiança não remove), encontrado %d", len(fires))
 	}
-
-	expectedCell := crdt.Cell{X: 15, Y: 25}
-	if fires[0] != expectedCell {
-		t.Errorf("Célula do delta não corresponde: esperado %+v, encontrado %+v",
-			expectedCell, fires[0])
+	if fires[0] != cell {
+		t.Errorf("Célula existente não corresponde: esperado %+v, encontrado %+v", cell, fires[0])
 	}
 }
 
@@ -87,11 +102,12 @@ func TestGlobalState(t *testing.T) {
 	// Adiciona fogo via função global
 	cell := crdt.Cell{X: 5, Y: 15}
 	meta := crdt.FireMeta{
-		Timestamp:  time.Now().UnixMilli(),
-		Confidence: 0.7,
+		Timestamp:   time.Now().UnixMilli(),
+		Confidence:  95,
+		Temperature: 100.0,
 	}
 
-	AddFire(cell, meta)
+	ProcessFireReading(cell, meta)
 
 	// Verifica via função global
 	fires := GetActiveFires()
@@ -103,33 +119,5 @@ func TestGlobalState(t *testing.T) {
 	stats := GetStats()
 	if stats["active_fires"] != 1 {
 		t.Errorf("Estatísticas incorretas: %+v", stats)
-	}
-}
-
-func TestRemoveFire(t *testing.T) {
-	ds := NewDroneState("drone1")
-
-	// Adiciona fogo
-	cell := crdt.Cell{X: 30, Y: 40}
-	meta := crdt.FireMeta{
-		Timestamp:  time.Now().UnixMilli(),
-		Confidence: 0.95,
-	}
-
-	ds.AddFire(cell, meta)
-
-	// Verifica que foi adicionado
-	fires := ds.GetActiveFires()
-	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo antes da remoção, encontrado %d", len(fires))
-	}
-
-	// Remove o fogo
-	ds.RemoveFire(cell)
-
-	// Verifica que foi removido
-	fires = ds.GetActiveFires()
-	if len(fires) != 0 {
-		t.Errorf("Esperado 0 fogos após remoção, encontrado %d", len(fires))
 	}
 }

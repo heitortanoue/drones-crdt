@@ -15,7 +15,6 @@ type Neighbor struct {
 	IP       net.IP    `json:"ip"`
 	Port     int       `json:"port"`    // porta TCP para dados
 	ID       string    `json:"id"`      // ID do drone (UUID)
-	Version  int       `json:"version"` // último delta do drone
 	LastSeen time.Time `json:"last_seen"`
 }
 
@@ -128,8 +127,8 @@ func (nt *NeighborTable) GetStats() map[string]interface{} {
 func (nt *NeighborTable) String() string {
 	result := "Neighbor Table:\n"
 	for _, neighbor := range nt.neighbors {
-		result += fmt.Sprintf("IP: %s, Port: %d, ID: %s, Version: %d, LastSeen: %s\n",
-			neighbor.IP.String(), neighbor.Port, neighbor.ID, neighbor.Version, neighbor.LastSeen.Format(time.RFC3339))
+		result += fmt.Sprintf("IP: %s, Port: %d, ID: %s, LastSeen: %s\n",
+			neighbor.IP.String(), neighbor.Port, neighbor.ID, neighbor.LastSeen.Format(time.RFC3339))
 	}
 	return result
 }

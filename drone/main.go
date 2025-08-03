@@ -198,15 +198,10 @@ func createSensorHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Dis
 		var meta crdt.FireMeta
 		meta.Timestamp = reading.Timestamp
 		meta.Confidence = reading.Confidence
+		meta.Temperature = reading.Temperature
 
 		// Adiciona a leitura ao estado do drone
-		state.AddFire(cell, meta)
-
-		// if dissemination.IsRunning() {
-		// 	if err := dissemination.DisseminateDelta(delta); err != nil {
-		// 		log.Printf("[MAIN] Erro ao disseminar delta %s: %v", delta.ID.String()[:8], err)
-		// 	}
-		// }
+		state.ProcessFireReading(cell, meta)
 
 		response := map[string]interface{}{
 			"message": "Leitura adicionada com sucesso",

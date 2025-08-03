@@ -148,7 +148,7 @@ func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 		return nil
 	}
 
-	log.Printf("[DISSEMINATION] Processando delta %s (TTL: %d)", msg.ID.String()[:8], msg.TTL)
+	log.Printf("[DISSEMINATION] Processando delta %s do drone %s (TTL: %d)", msg.ID.String()[:8], msg.SenderID, msg.TTL)
 
 	// Aplica o delta recebido ao estado local do drone
 	state.MergeDelta(msg.Data)

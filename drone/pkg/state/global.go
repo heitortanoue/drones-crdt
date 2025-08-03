@@ -35,17 +35,10 @@ func MergeDelta(delta crdt.FireDelta) {
 
 // Funções de conveniência para acesso ao estado global
 
-// AddFire adiciona fogo ao estado global
-func AddFire(cell crdt.Cell, meta crdt.FireMeta) {
+// ProcessFireReading processa uma leitura de fogo no estado global
+func ProcessFireReading(cell crdt.Cell, meta crdt.FireMeta) {
 	if globalState != nil {
-		globalState.AddFire(cell, meta)
-	}
-}
-
-// RemoveFire remove fogo do estado global
-func RemoveFire(cell crdt.Cell) {
-	if globalState != nil {
-		globalState.RemoveFire(cell)
+		globalState.ProcessFireReading(cell, meta)
 	}
 }
 

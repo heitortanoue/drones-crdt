@@ -30,6 +30,28 @@ func NewDroneState(droneID string) *DroneState {
 	}
 }
 
+func (ds *DroneState) ProcessFireReading(cell crdt.Cell, meta crdt.FireMeta) {
+	const temperatureThreshold = 45.0
+	const confidenceThreshold = 50.0
+
+	if meta.Confidence < confidenceThreshold {
+		log.Printf("[PROCESS] Leitura com baixa confiança: %.1f%% - ignorada", meta.Confidence)
+		return
+	}
+
+	if meta.Temperature >= temperatureThreshold {
+		ds.AddFire(cell, meta)
+
+		log.Printf("[PROCESS] Fogo detectado em: (%d,%d) T=%.1f°C, confiança=%.1f%% → ADICIONADO",
+			cell.X, cell.Y, meta.Temperature, meta.Confidence)
+	} else {
+		ds.RemoveFire(cell)
+
+		log.Printf("[PROCESS] Atividade fraca em: (%d,%d) T=%.1f°C, confiança=%.1f%% → REMOVIDO",
+			cell.X, cell.Y, meta.Temperature, meta.Confidence)
+	}
+}
+
 // AddFire adiciona uma nova detecção de fogo ao estado local
 func (ds *DroneState) AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	ds.mutex.Lock()
@@ -91,6 +113,7 @@ func (ds *DroneState) MergeDelta(delta crdt.FireDelta) {
 	ds.fires.MergeDelta(kernel)
 
 	log.Printf("[STATE] Aplicado delta com %d entradas", len(delta.Entries))
+	log.Printf("[STATE] Estado atualizado: %d células ativas", len(ds.fires.Core.Entries))
 }
 
 // GenerateDelta gera um delta das mudanças locais para disseminação

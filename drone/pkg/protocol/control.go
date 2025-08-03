@@ -88,7 +88,7 @@ func (cs *ControlSystem) helloLoop() {
 func (cs *ControlSystem) sendHello() {
 	// Cria mensagem HELLO
 	msg := HelloMessage{
-		ID:        cs.droneID,
+		ID:      cs.droneID,
 	}
 
 	// Serializa para JSON

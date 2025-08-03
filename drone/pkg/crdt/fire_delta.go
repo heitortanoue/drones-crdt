@@ -8,6 +8,7 @@ type Cell struct {
 type FireMeta struct {
 	Timestamp  int64   `json:"timestamp"`
 	Confidence float64 `json:"confidence"`
+	Temperature float64 `json:"temperature"`
 }
 
 type FireDeltaEntry struct {

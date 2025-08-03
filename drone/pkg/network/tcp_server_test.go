@@ -135,73 +135,6 @@ func TestTCPServer_HealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestTCPServer_NotImplementedEndpoints(t *testing.T) {
-	port := findFreeTCPPort()
-	if port == 0 {
-		t.Fatal("Não foi possível encontrar porta TCP livre")
-	}
-
-	server := NewTCPServer("not-impl-test", port)
-
-	go func() {
-		err := server.Start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Erro ao iniciar servidor: %v", err)
-		}
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-	defer server.Stop()
-
-	// Lista de endpoints que devem retornar "not implemented"
-	endpoints := []string{"/sensor", "/delta", "/state", "/stats", "/cleanup"}
-
-	for _, endpoint := range endpoints {
-		t.Run(endpoint, func(t *testing.T) {
-			url := fmt.Sprintf("http://localhost:%d%s", port, endpoint)
-			resp, err := makeHTTPRequest("GET", url)
-			if err != nil {
-				t.Fatalf("Erro ao fazer request para %s: %v", endpoint, err)
-			}
-			defer resp.Body.Close()
-
-			// Verifica status code
-			if resp.StatusCode != http.StatusNotImplemented {
-				t.Errorf("Status code esperado %d, obtido %d", http.StatusNotImplemented, resp.StatusCode)
-			}
-
-			// Verifica content type
-			contentType := resp.Header.Get("Content-Type")
-			if contentType != "application/json" {
-				t.Errorf("Content-Type esperado application/json, obtido %s", contentType)
-			}
-
-			// Verifica conteúdo da resposta
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatalf("Erro ao ler body da resposta: %v", err)
-			}
-
-			var response map[string]interface{}
-			err = json.Unmarshal(body, &response)
-			if err != nil {
-				t.Fatalf("Erro ao decodificar JSON: %v", err)
-			}
-
-			expectedFields := []string{"error", "feature", "phase"}
-			for _, field := range expectedFields {
-				if _, exists := response[field]; !exists {
-					t.Errorf("Campo %s deveria existir na resposta de %s", field, endpoint)
-				}
-			}
-
-			if response["error"] != "Not implemented" {
-				t.Errorf("error esperado 'Not implemented', obtido %v", response["error"])
-			}
-		})
-	}
-}
-
 func TestTCPServer_CustomHandlers(t *testing.T) {
 	port := findFreeTCPPort()
 	if port == 0 {
@@ -239,13 +172,6 @@ func TestTCPServer_CustomHandlers(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]string{"message": "custom stats handler"})
 	}
 
-	cleanupCalled := false
-	server.CleanupHandler = func(w http.ResponseWriter, r *http.Request) {
-		cleanupCalled = true
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"message": "custom cleanup handler"})
-	}
-
 	go func() {
 		err := server.Start()
 		if err != nil && err != http.ErrServerClosed {
@@ -266,7 +192,6 @@ func TestTCPServer_CustomHandlers(t *testing.T) {
 		{"/delta", &deltaCalled, "custom delta handler"},
 		{"/state", &stateCalled, "custom state handler"},
 		{"/stats", &statsCalled, "custom stats handler"},
-		{"/cleanup", &cleanupCalled, "custom cleanup handler"},
 	}
 
 	for _, tc := range testCases {

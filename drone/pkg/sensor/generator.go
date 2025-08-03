@@ -52,7 +52,7 @@ func (fsg *FireSensorGenerator) Start() {
 	}
 
 	fsg.running = true
-	log.Printf("[FIRE-GENERATOR] Iniciando detecção automática para %s (intervalo: %v)", fsg.sensorID, fsg.interval)
+	log.Printf("[GENERATOR] Iniciando detecção automática para %s (intervalo: %v)", fsg.sensorID, fsg.interval)
 
 	go fsg.generateLoop()
 }
@@ -65,7 +65,7 @@ func (fsg *FireSensorGenerator) Stop() {
 
 	fsg.running = false
 	close(fsg.stopCh)
-	log.Printf("[FIRE-GENERATOR] Parando detecção automática para %s", fsg.sensorID)
+	log.Printf("[GENERATOR] Parando detecção automática para %s", fsg.sensorID)
 }
 
 // generateLoop executa o loop principal de geração
@@ -81,7 +81,7 @@ func (fsg *FireSensorGenerator) generateLoop() {
 		case <-ticker.C:
 			fsg.generateDetection()
 		case <-fsg.stopCh:
-			log.Printf("[FIRE-GENERATOR] Loop de detecção finalizado para %s", fsg.sensorID)
+			log.Printf("[GENERATOR] Loop de detecção finalizado para %s", fsg.sensorID)
 			return
 		}
 	}
@@ -99,19 +99,27 @@ func (fsg *FireSensorGenerator) generateDetection() {
 
 	// Gera nível de confiança (mais provável de ser baixo, ocasionalmente alto)
 	var confidence float64
-	if rand.Float64() < 0.1 { // 10% chance de detecção de alta confiança
+	if rand.Float64() < 0.9 {
 		confidence = 70.0 + rand.Float64()*30.0 // 70-100%
-	} else { // 90% chance de detecção de baixa confiança
+	} else {
 		confidence = 10.0 + rand.Float64()*40.0 // 10-50%
+	}
+
+	var temperature float64
+	if confidence > 50.0 {
+		temperature = 45.0 + rand.Float64()*55.0 // 45-100°C
+	} else {
+		temperature = 20.0 + rand.Float64()*25.0 // 20-45°C
 	}
 
 	// Cria a leitura
 	reading := FireReading{
-		X:          x,
-		Y:          y,
-		Confidence: confidence,
-		Timestamp:  time.Now().UnixMilli(),
-		SensorID:   fsg.sensorID,
+		X:           x,
+		Y:           y,
+		Confidence:  confidence,
+		Temperature: temperature,
+		Timestamp:   time.Now().UnixMilli(),
+		SensorID:    fsg.sensorID,
 	}
 
 	// Adiciona ao sensor (lista interna)
@@ -121,20 +129,22 @@ func (fsg *FireSensorGenerator) generateDetection() {
 	var cell crdt.Cell
 	cell.X = reading.X
 	cell.Y = reading.Y
+	
 	var meta crdt.FireMeta
 	meta.Timestamp = reading.Timestamp
 	meta.Confidence = reading.Confidence
+	meta.Temperature = reading.Temperature
 
-	state.AddFire(cell, meta)
+	state.ProcessFireReading(cell, meta)
 
-	log.Printf("[FIRE-GENERATOR] %s detectou: (%d,%d) confiança=%.1f%% - adicionado ao estado global",
+	log.Printf("[GENERATOR] %s detectou: (%d,%d) confiança=%.1f%% - adicionado ao estado global",
 		fsg.sensorID, x, y, confidence)
 }
 
 // SetInterval atualiza o intervalo de geração
 func (fsg *FireSensorGenerator) SetInterval(interval time.Duration) {
 	fsg.interval = interval
-	log.Printf("[FIRE-GENERATOR] Intervalo atualizado para %s: %v", fsg.sensorID, interval)
+	log.Printf("[GENERATOR] Intervalo atualizado para %s: %v", fsg.sensorID, interval)
 }
 
 // GetStats retorna estatísticas do gerador

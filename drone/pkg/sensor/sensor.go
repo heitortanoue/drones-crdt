@@ -7,11 +7,12 @@ import (
 
 // FireReading representa uma leitura de detecção de incêndio
 type FireReading struct {
-	X          int     `json:"x"`          // Coordenada X da célula
-	Y          int     `json:"y"`          // Coordenada Y da célula
-	Confidence float64 `json:"confidence"` // Nível de confiança (0-100%)
-	Timestamp  int64   `json:"timestamp"`  // Timestamp em milissegundos
-	SensorID   string  `json:"sensor_id"`  // ID do sensor que fez a leitura
+	X           int     `json:"x"`           // Coordenada X da célula
+	Y           int     `json:"y"`           // Coordenada Y da célula
+	Temperature float64 `json:"temperature"` // Temperatura detectada
+	Confidence  float64 `json:"confidence"`  // Nível de confiança (0-100%)
+	Timestamp   int64   `json:"timestamp"`   // Timestamp em milissegundos
+	SensorID    string  `json:"sensor_id"`   // ID do sensor que fez a leitura
 }
 
 // FireSensor representa um sensor simples que coleta leituras
