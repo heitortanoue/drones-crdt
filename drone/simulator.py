@@ -3,6 +3,7 @@
 import time
 import os
 import curses
+import shutil
 
 from mininet.log import setLogLevel, info
 from mn_wifi.link import wmediumd, adhoc
@@ -12,6 +13,9 @@ from mn_wifi.wmediumdConnector import interference
 
 # Lista global para armazenar os processos dos drones Go
 go_drone_processes = []
+
+# Diretório para salvar os dados de telemetria
+output_dir = 'drone_execution_data/'
 
 def keyboard_control(net):
     """
@@ -79,6 +83,16 @@ def keyboard_control(net):
         curses.endwin()
         info("\n*** Controle manual finalizado. ***\n")
 
+def update_telemetry_data_dir(nodes):
+    info(f"*** Movendo arquivos de telemetria para {output_dir}... ***\n")
+    os.makedirs(output_dir, exist_ok=True)
+    for drone_node in nodes:
+        source_file = f"position-{drone_node.name}-mn-telemetry.txt" 
+        destination_file = os.path.join(output_dir, source_file)
+        
+        if os.path.exists(source_file):
+            shutil.move(source_file, destination_file)
+            info(f"-> Arquivo {source_file} movido. <-\n")
 
 def topology():
     info("--- Criando uma rede de multiplos drones Go com Mininet-WiFi ---\n")
@@ -143,6 +157,7 @@ def topology():
 
     info("*** Parando rede ***\n")
     kill_process()
+    update_telemetry_data_dir(net.stations)
     net.stop()
 
 
