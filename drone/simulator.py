@@ -2,25 +2,89 @@
 
 import time
 import os
-import subprocess
-import signal
+import curses
 
 from mininet.log import setLogLevel, info
 from mn_wifi.link import wmediumd, adhoc
-from mn_wifi.cli import CLI
 from mn_wifi.net import Mininet_wifi
 from mn_wifi.telemetry import telemetry
 from mn_wifi.wmediumdConnector import interference
 
-
 # Lista global para armazenar os processos dos drones Go
 go_drone_processes = []
 
+def keyboard_control(net):
+    """
+    Permite o controle manual dos drones usando o teclado com a biblioteca curses
+    """
+    drones = net.stations
+    selected_drone_index = 0
+    move_step = 2  # Passo de movimento em unidades de posição
+
+    stdscr = curses.initscr()
+    curses.cbreak()
+    stdscr.keypad(True)
+    stdscr.nodelay(True)
+    curses.noecho()
+
+    info("*** Iniciando controle manual dos drones ***\n")
+    info("Use as SETAS para mover, TAB para trocar de drone, 'q' para sair.\n")
+
+    try:
+        while True:
+            drone = drones[selected_drone_index]
+            
+            stdscr.clear()
+            stdscr.addstr(0, 0, "Controle de Drones Ativado")
+            stdscr.addstr(1, 0, "Pressione 'q' para sair e parar a simulação.")
+            stdscr.addstr(3, 0, f"--> Drone selecionado: {drone.name} [IP: {drone.IP()}]")
+            
+            for i, d in enumerate(drones):
+                current_pos_str = d.position if hasattr(d, 'position') else "N/A"
+                if i != selected_drone_index:
+                    stdscr.addstr(4 + i, 0, f"    Drone: {d.name} [Posição: {current_pos_str}]")
+
+            current_pos = drone.position
+            stdscr.addstr(4 + selected_drone_index, 0, f"--> Drone: {drone.name} [Posição: {current_pos}] <--")
+            stdscr.refresh()
+
+            key = stdscr.getch()
+
+            if key == ord('q'):
+                break
+
+            elif key == ord('\t'):
+                selected_drone_index = (selected_drone_index + 1) % len(drones)
+                time.sleep(0.1)
+            
+            elif key in [curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT]:
+                x, y, z = float(current_pos[0]), float(current_pos[1]), float(current_pos[2])
+                
+                if key == curses.KEY_UP:
+                    y += move_step
+                elif key == curses.KEY_DOWN:
+                    y -= move_step
+                elif key == curses.KEY_LEFT:
+                    x -= move_step
+                elif key == curses.KEY_RIGHT:
+                    x += move_step
+                
+                drone.position = (x, y, z)
+            
+            time.sleep(0.1)
+    finally:
+        curses.nocbreak()
+        stdscr.keypad(False)
+        curses.echo()
+        curses.endwin()
+        info("\n*** Controle manual finalizado. ***\n")
+
+
 def topology():
-    "Cria uma rede de m\u00FAltiplos drones Go."
+    info("--- Criando uma rede de multiplos drones Go com Mininet-WiFi ---\n")
     net = Mininet_wifi(link=wmediumd, wmediumd_mode=interference)
 
-    info("*** Criando n\u00F3s (drones)\n")
+    info("*** Criando nós que representam cada um dos drones ***\n")
     dr1 = net.addStation('dr1', mac='00:00:00:00:00:01', ip='10.0.0.1/8',
                          position='30,60,0')
     dr2 = net.addStation('dr2', mac='00:00:00:00:00:02', ip='10.0.0.2/8',
@@ -30,7 +94,7 @@ def topology():
 
     net.setPropagationModel(model="logDistance", exp=4.5)
 
-    info("*** Configurando n\u00F3s\n")
+    info("*** Configurando nós ***\n")
     net.configureNodes()
 
     # Adicionando links ad-hoc para todos os drones
@@ -47,12 +111,8 @@ def topology():
                 mode='g', channel=5, ht_cap='HT40+')
 
 
-    info("*** Iniciando rede\n")
+    info("*** Iniciando rede ***\n\n")
     net.build()
-
-    # Configura o modelo de mobilidade para os drones se moverem
-    info("*** Habilitando mobilidade para os drones\n")
-    net.setMobilityModel(time=0, model='RandomDirection', max_x=100, max_y=100, min_v=0.1, max_v=0.5)
 
     nodes = net.stations
     telemetry(nodes=nodes, single=True, data_type='position')
@@ -62,51 +122,47 @@ def topology():
         sta_drone.append(n.name)
     sta_drone_send = ' '.join(map(str, sta_drone))
 
-    info("*** Iniciando socket server\n")
+    info("*** Iniciando socket server ***\n")
     net.socketServer(ip='127.0.0.1', port=12345)
 
-    # Inicia m\u00FAltiplos drones Go, cada um com ID e portas \u00FAnicos
-    info("*** Iniciando os drones Go...\n")
+    info("--- Iniciando os drones Go... ---\n")
     global go_drone_processes
-    # O c\u00F3digo Go deve ser compilado primeiro e o execut\u00E1vel deve estar no path
+    # O código Go deve ser compilado primeiro e o executável deve estar no path
     for i, drone in enumerate(net.stations, 1):
         drone_id = f'drone-go-{i}'
         udp_port = 7000 + i
         tcp_port = 8080 + i
-        # Inicia o processo do drone Go no n\u00F3 Mininet e armazena o processo
         process = drone.popen(f'./main -id={drone_id} -udp-port={udp_port} -tcp-port={tcp_port}')
         go_drone_processes.append(process)
-        info(f"*** Drone {drone_id} iniciado com PID: {process.pid} (UDP:{udp_port}, TCP:{tcp_port})\n")
+        info(f"*** Drone {drone_id} iniciado com PID: {process.pid} (UDP:{udp_port}, TCP:{tcp_port}) ***\n")
 
     time.sleep(5)  # Espera os drones Go inicializarem
 
-    info("*** Executando CLI\n")
-    CLI(net)
+    info("*** Iniciando controle manual. Abra a visualização de telemetria em outro terminal ***\n")
+    keyboard_control(net)
 
-    info("*** Parando rede\n")
+    info("*** Parando rede ***\n")
     kill_process()
     net.stop()
 
 
 def kill_process():
     path = os.path.dirname(os.path.abspath(__file__))
-    info("*** Parando processos...\n")
+    info("Parando processos...\n")
 
-    # Encerra os processos dos drones Go
     global go_drone_processes
     for process in go_drone_processes:
-        if process.poll() is None:  # Verifica se o processo ainda est\u00E1 rodando
-            info(f"*** Parando o drone Go com PID {process.pid}...\n")
+        if process.poll() is None:
+            info(f"*** Parando o drone Go com PID {process.pid}... ***\n")
             process.terminate()
             process.wait()
     go_drone_processes = []
-    info("*** Todos os drones Go foram parados.\n")
+    info("*** Todos os drones Go foram parados. ***\n")
 
     os.system('rm -rf {}/data/*'.format(path))
 
 
 if __name__ == '__main__':
     setLogLevel('info')
-    # Matando processos antigos
     kill_process()
     topology()
