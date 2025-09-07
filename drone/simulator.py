@@ -16,6 +16,7 @@ from mn_wifi.wmediumdConnector import interference
 # Global list to track the Go drone application processes
 go_drone_processes: list[Popen] = []
 drone_names = []
+exec_path = './bin/drone-linux'  # Path to the compiled Go drone application
 
 # Directory to store telemetry data logs
 output_dir = 'drone_execution_data/'
@@ -99,7 +100,7 @@ def topology():
         drone_id = f'drone-go-{i}'
         udp_port = 7000 + i
         tcp_port = 8080 + i
-        process = drone.popen(f'./main -id={drone_id} -udp-port={udp_port} -tcp-port={tcp_port}')
+        process = drone.popen(f'{exec_path} -id={drone_id} -udp-port={udp_port} -tcp-port={tcp_port}')
         go_drone_processes.append(process)
         info(f"*** Drone {drone_id} started with PID: {process.pid} (UDP:{udp_port}, TCP:{tcp_port}) ***\n")
 
@@ -113,11 +114,11 @@ def topology():
     kill_go_processes()
     net.stop()
 
-    time.sleep(2)  # Ensure all processes have terminated
+    time.sleep(5)  # Ensure all processes have terminated
     update_telemetry_data_dir(drone_names)
 
 if __name__ == '__main__':
     setLogLevel('info')
     # Clean up any leftover Go processes from previous runs to avoid conflicts
-    os.system('sudo killall -9 main &> /dev/null') 
+    os.system(f'sudo killall -9 {exec_path} &> /dev/null')
     topology()
