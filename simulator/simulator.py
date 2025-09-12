@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import time
 import os
 import shutil
@@ -29,7 +27,7 @@ def update_telemetry_data_dir(names):
     for name in names:
         source_file = f"position-{name}-mn-telemetry.txt"
         destination_file = os.path.join(output_dir, source_file)
-        
+
         if os.path.exists(source_file):
             shutil.move(source_file, destination_file)
             info(f"-> File {source_file} moved <-\n")
@@ -51,7 +49,7 @@ def kill_go_processes():
 def topology():
     """Creates and runs the network topology for the drone simulation"""
     info("--- Creating a Go drone network with Mininet-WiFi ---\n")
-    
+
     # Initialize the Mininet-WiFi network with a controller and realistic wireless medium
     net = Mininet_wifi(controller=Controller, link=wmediumd, wmediumd_mode=interference)
 
