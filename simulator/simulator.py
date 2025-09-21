@@ -14,7 +14,8 @@ from mn_wifi.wmediumdConnector import interference
 # Global list to track the Go drone application processes
 go_drone_processes: list[Popen] = []
 drone_names = []
-exec_path = './bin/drone-linux'  # Path to the compiled Go drone application
+drone_number = 3
+exec_path = '../drone/bin/drone-linux'  # Path to the compiled Go drone application
 
 # Directory to store telemetry data logs
 output_dir = 'drone_execution_data/'
@@ -52,29 +53,33 @@ def topology():
 
     # Initialize the Mininet-WiFi network with a controller and realistic wireless medium
     net = Mininet_wifi(controller=Controller, link=wmediumd, wmediumd_mode=interference)
-
-    info("*** Creating nodes to represent each drone ***\n")
-    dr1 = net.addStation('dr1', mac='00:00:00:00:00:01', ip='10.0.0.1/8', position='30,60,0')
-    dr2 = net.addStation('dr2', mac='00:00:00:00:00:02', ip='10.0.0.2/8', position='70,30,0')
-    dr3 = net.addStation('dr3', mac='00:00:00:00:00:03', ip='10.0.0.3/8', position='10,20,0')
     c0 = net.addController('c0')
 
+    # Add a switch to connect all drones, like a bridge network
+    info("*** Creating nodes to represent each drone ***\n")
+
+    drones = []
+    for i in range (1, drone_number + 1):
+        drone_name = f'dr{i}'
+        drone_names.append(drone_name)
+        mac = f'00:00:00:00:00:0{i}'
+        ip = f'10.0.0.{i}/8'
+        drone = net.addStation(drone_name,mac=mac,ip=ip,position='10,10,0',txpower=20)
+        drones.append(drone)
+
     info("*** Configuring the signal propagation model ***\n")
-    net.setPropagationModel(model="logDistance", exp=4.5)
+    net.setPropagationModel(model="logDistance", exp=4)
 
     info("*** Configuring network nodes ***\n")
     net.configureNodes()
-
-    info("*** Adding ad-hoc links for drone-to-drone communication ***\n")
-    # The batman_adv protocol creates a mesh network, allowing drones to communicate
-    # directly without a central access point, which is ideal for gossip protocols
-    net.addLink(dr1, cls=adhoc, intf='dr1-wlan0', ssid='adhocNet', proto='batman_adv', mode='g', channel=5, ht_cap='HT40+')
-    net.addLink(dr2, cls=adhoc, intf='dr2-wlan0', ssid='adhocNet', proto='batman_adv', mode='g', channel=5, ht_cap='HT40+')
-    net.addLink(dr3, cls=adhoc, intf='dr3-wlan0', ssid='adhocNet', proto='batman_adv', mode='g', channel=5, ht_cap='HT40+')
+    i=0
+    for drone in drones:
+        net.addLink(drone,cls=adhoc,intf=f'{drone_names[i]}-wlan0',ssid='adhocNet',proto='batman_adv',mode='g',channel=5,ht_cap='HT40+')
+        i+=1
 
     info("*** Building the network ***\n")
     net.build()
-    c0.start()
+    net.start()
 
     info("*** Configuring batman-adv interfaces on each drone ***\n")
     # This loop is crucial for batman-adv to work correctly. It brings up the
@@ -87,20 +92,20 @@ def topology():
 
     # Start telemetry to plot drone positions in real-time
     telemetry(nodes=net.stations, single=True, data_type='position')
-    for n in net.stations:
-        drone_names.append(n.name) # Collect drone names for telemetry file management
 
     info("--- Starting Go applications on drones... ---\n")
     # Each station (drone) runs an instance of the compiled Go application
     # The application handles the high-level logic (gossip, CRDTs, etc.)
-    global go_drone_processes
+
     for i, drone in enumerate(net.stations, 1):
         drone_id = f'drone-go-{i}'
-        udp_port = 7000 + i
-        tcp_port = 8080 + i
-        process = drone.popen(f'{exec_path} -id={drone_id} -udp-port={udp_port} -tcp-port={tcp_port}')
-        go_drone_processes.append(process)
-        info(f"*** Drone {drone_id} started with PID: {process.pid} (UDP:{udp_port}, TCP:{tcp_port}) ***\n")
+        command = (f"{exec_path} -id={drone_id} "
+               f"-tcp-port=8080 -udp-port=7000")
+
+        drone.cmd(f'xterm -e "{command}" &')
+        # go_drone_processes.append(process)
+        # info(f"*** Drone {drone_id} started with PID: {process.pid} (UDP:7000, TCP:8080) ***\n")
+
 
     # Wait for the Go applications to initialize before starting the CLI
     time.sleep(5)
