@@ -1,7 +1,6 @@
 import time
 import os
 import shutil
-from subprocess import Popen
 
 from mininet.node import Controller
 from mininet.log import setLogLevel, info
@@ -11,8 +10,6 @@ from mn_wifi.cli import CLI
 from mn_wifi.telemetry import telemetry
 from mn_wifi.wmediumdConnector import interference
 
-# Global list to track the Go drone application processes
-go_drone_processes: list[Popen] = []
 drone_names = []
 drone_number = 3
 exec_path = '../drone/bin/drone-linux'  # Path to the compiled Go drone application
@@ -32,20 +29,6 @@ def update_telemetry_data_dir(names):
         if os.path.exists(source_file):
             shutil.move(source_file, destination_file)
             info(f"-> File {source_file} moved <-\n")
-
-def kill_go_processes():
-    """Terminates all running Go drone processes."""
-    info("*** Terminating Go processes... ***\n")
-
-    global go_drone_processes
-    for process in go_drone_processes:
-        # Check if the process is still running before trying to terminate it
-        if process.poll() is None:
-            info(f"-> Stopping Go drone with PID {process.pid}... <-\n")
-            process.terminate()
-            process.wait()
-    go_drone_processes = []
-    info("*** All Go drones have been stopped ***\n")
 
 def topology():
     """Creates and runs the network topology for the drone simulation"""
@@ -96,16 +79,11 @@ def topology():
     info("--- Starting Go applications on drones... ---\n")
     # Each station (drone) runs an instance of the compiled Go application
     # The application handles the high-level logic (gossip, CRDTs, etc.)
-
     for i, drone in enumerate(net.stations, 1):
         drone_id = f'drone-go-{i}'
         command = (f"{exec_path} -id={drone_id} "
                f"-tcp-port=8080 -udp-port=7000")
-
         drone.cmd(f'xterm -e "{command}" &')
-        # go_drone_processes.append(process)
-        # info(f"*** Drone {drone_id} started with PID: {process.pid} (UDP:7000, TCP:8080) ***\n")
-
 
     # Wait for the Go applications to initialize before starting the CLI
     time.sleep(5)
@@ -114,10 +92,9 @@ def topology():
     CLI(net)
 
     info("*** Shutting down simulation ***\n")
-    kill_go_processes()
     net.stop()
 
-    time.sleep(5)  # Ensure all processes have terminated
+    time.sleep(10)  # Ensure all processes have terminated
     update_telemetry_data_dir(drone_names)
 
 if __name__ == '__main__':
