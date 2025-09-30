@@ -8,24 +8,24 @@ import (
 )
 
 func TestDeduplicationCache_NewCache(t *testing.T) {
-	// Teste com capacidade válida
+	// Test with valid capacity
 	cache := NewDeduplicationCache(100)
 	if cache.capacity != 100 {
-		t.Errorf("Esperado capacidade 100, obtido %d", cache.capacity)
+		t.Errorf("Expected capacity 100, got %d", cache.capacity)
 	}
 	if cache.Size() != 0 {
-		t.Errorf("Cache novo deveria estar vazio, size: %d", cache.Size())
+		t.Errorf("New cache should be empty, size: %d", cache.Size())
 	}
 
-	// Teste com capacidade inválida (deve usar padrão)
+	// Test with invalid capacity (should use default)
 	cache2 := NewDeduplicationCache(0)
 	if cache2.capacity != 1000 {
-		t.Errorf("Esperado capacidade padrão 1000, obtido %d", cache2.capacity)
+		t.Errorf("Expected default capacity 1000, got %d", cache2.capacity)
 	}
 
 	cache3 := NewDeduplicationCache(-5)
 	if cache3.capacity != 1000 {
-		t.Errorf("Esperado capacidade padrão 1000, obtido %d", cache3.capacity)
+		t.Errorf("Expected default capacity 1000, got %d", cache3.capacity)
 	}
 }
 
@@ -34,64 +34,64 @@ func TestDeduplicationCache_AddAndContains(t *testing.T) {
 	id1 := uuid.New()
 	id2 := uuid.New()
 
-	// Verifica que cache está vazio
+	// Cache should start empty
 	if cache.Contains(id1) {
-		t.Error("Cache não deveria conter id1")
+		t.Error("Cache should not contain id1 initially")
 	}
 
-	// Adiciona primeiro ID
+	// Add first ID
 	cache.Add(id1)
 	if !cache.Contains(id1) {
-		t.Error("Cache deveria conter id1 após Add")
+		t.Error("Cache should contain id1 after Add")
 	}
 	if cache.Size() != 1 {
-		t.Errorf("Esperado size 1, obtido %d", cache.Size())
+		t.Errorf("Expected size 1, got %d", cache.Size())
 	}
 
-	// Adiciona segundo ID
+	// Add second ID
 	cache.Add(id2)
 	if !cache.Contains(id2) {
-		t.Error("Cache deveria conter id2")
+		t.Error("Cache should contain id2")
 	}
 	if cache.Size() != 2 {
-		t.Errorf("Esperado size 2, obtido %d", cache.Size())
+		t.Errorf("Expected size 2, got %d", cache.Size())
 	}
 
-	// Adiciona ID duplicado (não deve aumentar size)
+	// Add duplicate ID (size should not increase)
 	cache.Add(id1)
 	if cache.Size() != 2 {
-		t.Errorf("Size não deveria mudar com ID duplicado, obtido %d", cache.Size())
+		t.Errorf("Size should not change with duplicate ID, got %d", cache.Size())
 	}
 }
 
 func TestDeduplicationCache_LRUEviction(t *testing.T) {
-	cache := NewDeduplicationCache(2) // Capacidade pequena
+	cache := NewDeduplicationCache(2) // Small capacity
 	id1 := uuid.New()
 	id2 := uuid.New()
 	id3 := uuid.New()
 
-	// Adiciona até capacidade máxima
+	// Fill to capacity
 	cache.Add(id1)
 	cache.Add(id2)
 	if cache.Size() != 2 {
-		t.Errorf("Esperado size 2, obtido %d", cache.Size())
+		t.Errorf("Expected size 2, got %d", cache.Size())
 	}
 
-	// Adiciona terceiro ID (deve causar eviction)
+	// Add third ID (should trigger eviction)
 	cache.Add(id3)
 	if cache.Size() != 2 {
-		t.Errorf("Size deveria permanecer 2 após eviction, obtido %d", cache.Size())
+		t.Errorf("Size should remain 2 after eviction, got %d", cache.Size())
 	}
 
-	// id1 deveria ter sido removido (least recently used)
+	// id1 should have been evicted (least recently used)
 	if cache.Contains(id1) {
-		t.Error("id1 deveria ter sido removido por LRU")
+		t.Error("id1 should have been evicted by LRU")
 	}
 	if !cache.Contains(id2) {
-		t.Error("id2 deveria estar no cache")
+		t.Error("id2 should still be in the cache")
 	}
 	if !cache.Contains(id3) {
-		t.Error("id3 deveria estar no cache")
+		t.Error("id3 should be in the cache")
 	}
 }
 
@@ -102,28 +102,28 @@ func TestDeduplicationCache_LRUOrdering(t *testing.T) {
 	id3 := uuid.New()
 	id4 := uuid.New()
 
-	// Adiciona três IDs
+	// Add three IDs
 	cache.Add(id1)
 	cache.Add(id2)
 	cache.Add(id3)
 
-	// Acessa id1 para torná-lo mais recente
-	cache.Add(id1) // Move para head
+	// Access id1 to make it most recent
+	cache.Add(id1) // Move to head
 
-	// Adiciona id4 (deve remover id2, que é o menos recente)
+	// Add id4 (should evict id2 as least recently used)
 	cache.Add(id4)
 
 	if !cache.Contains(id1) {
-		t.Error("id1 deveria estar no cache (foi acessado recentemente)")
+		t.Error("id1 should still be in the cache (was recently accessed)")
 	}
 	if cache.Contains(id2) {
-		t.Error("id2 deveria ter sido removido (least recently used)")
+		t.Error("id2 should have been evicted (least recently used)")
 	}
 	if !cache.Contains(id3) {
-		t.Error("id3 deveria estar no cache")
+		t.Error("id3 should be in the cache")
 	}
 	if !cache.Contains(id4) {
-		t.Error("id4 deveria estar no cache")
+		t.Error("id4 should be in the cache")
 	}
 }
 
@@ -135,15 +135,15 @@ func TestDeduplicationCache_Clear(t *testing.T) {
 	cache.Add(id1)
 	cache.Add(id2)
 	if cache.Size() != 2 {
-		t.Errorf("Esperado size 2 antes do clear, obtido %d", cache.Size())
+		t.Errorf("Expected size 2 before Clear, got %d", cache.Size())
 	}
 
 	cache.Clear()
 	if cache.Size() != 0 {
-		t.Errorf("Cache deveria estar vazio após Clear, size: %d", cache.Size())
+		t.Errorf("Cache should be empty after Clear, size: %d", cache.Size())
 	}
 	if cache.Contains(id1) || cache.Contains(id2) {
-		t.Error("Cache não deveria conter nenhum ID após Clear")
+		t.Error("Cache should not contain any IDs after Clear")
 	}
 }
 
@@ -156,21 +156,20 @@ func TestDeduplicationCache_ConcurrentAccess(t *testing.T) {
 	// Test concurrent writes
 	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
-		go func(routineID int) {
+		go func() {
 			defer wg.Done()
 			for j := 0; j < idsPerGoroutine; j++ {
 				id := uuid.New()
 				cache.Add(id)
-				cache.Contains(id) // Test concurrent reads too
+				cache.Contains(id) // Test concurrent reads as well
 			}
-		}(i)
+		}()
 	}
-
 	wg.Wait()
 
-	// Verifica que o cache não está corrompido
+	// Cache should not be corrupted
 	if cache.Size() < 0 || cache.Size() > 1000 {
-		t.Errorf("Size inválido após acesso concorrente: %d", cache.Size())
+		t.Errorf("Invalid size after concurrent access: %d", cache.Size())
 	}
 
 	// Test concurrent stats access
@@ -180,7 +179,7 @@ func TestDeduplicationCache_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			stats := cache.GetStats()
 			if stats == nil {
-				t.Error("GetStats não deveria retornar nil")
+				t.Error("GetStats should not return nil")
 			}
 		}()
 	}
@@ -197,26 +196,26 @@ func TestDeduplicationCache_GetStats(t *testing.T) {
 
 	stats := cache.GetStats()
 	if stats == nil {
-		t.Fatal("GetStats não deveria retornar nil")
+		t.Fatal("GetStats should not return nil")
 	}
 
 	if capacity, ok := stats["capacity"].(int); !ok || capacity != 50 {
-		t.Errorf("Esperado capacity 50, obtido %v", stats["capacity"])
+		t.Errorf("Expected capacity 50, got %v", stats["capacity"])
 	}
 
 	if currentSize, ok := stats["size"].(int); !ok || currentSize != 2 {
-		t.Errorf("Esperado size 2, obtido %v", stats["size"])
+		t.Errorf("Expected size 2, got %v", stats["size"])
 	}
 
 	if utilizationFloat, ok := stats["utilization"].(float64); !ok || utilizationFloat != 0.04 {
-		t.Errorf("Esperado utilization 0.04, obtido %v", stats["utilization"])
+		t.Errorf("Expected utilization 0.04, got %v", stats["utilization"])
 	}
 }
 
 func TestDeduplicationCache_StressTest(t *testing.T) {
 	cache := NewDeduplicationCache(100)
 
-	// Adiciona mais IDs que a capacidade para testar eviction
+	// Add more IDs than capacity to test eviction
 	var ids []uuid.UUID
 	for i := 0; i < 150; i++ {
 		id := uuid.New()
@@ -224,22 +223,22 @@ func TestDeduplicationCache_StressTest(t *testing.T) {
 		cache.Add(id)
 	}
 
-	// Cache deve ter exatamente a capacidade máxima
+	// Cache should have exactly max capacity
 	if cache.Size() != 100 {
-		t.Errorf("Esperado size 100 após stress test, obtido %d", cache.Size())
+		t.Errorf("Expected size 100 after stress test, got %d", cache.Size())
 	}
 
-	// Primeiros 50 IDs deveriam ter sido removidos
+	// First 50 IDs should have been evicted
 	for i := 0; i < 50; i++ {
 		if cache.Contains(ids[i]) {
-			t.Errorf("ID %d deveria ter sido removido por eviction", i)
+			t.Errorf("ID %d should have been evicted", i)
 		}
 	}
 
-	// Últimos 100 IDs deveriam estar presentes
+	// Last 100 IDs should be present
 	for i := 50; i < 150; i++ {
 		if !cache.Contains(ids[i]) {
-			t.Errorf("ID %d deveria estar no cache", i)
+			t.Errorf("ID %d should be in the cache", i)
 		}
 	}
 }

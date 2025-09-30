@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// DeduplicationCache implementa cache LRU para deduplicação (Requisito F7)
+// DeduplicationCache implements an LRU cache for deduplication
 type DeduplicationCache struct {
 	capacity int
 	cache    map[uuid.UUID]*cacheNode
@@ -15,20 +15,20 @@ type DeduplicationCache struct {
 	mutex    sync.RWMutex
 }
 
-// cacheNode representa um nó na lista duplamente ligada
+// cacheNode represents a node in the doubly linked list
 type cacheNode struct {
 	key  uuid.UUID
 	prev *cacheNode
 	next *cacheNode
 }
 
-// NewDeduplicationCache cria um novo cache LRU
+// NewDeduplicationCache creates a new LRU cache
 func NewDeduplicationCache(capacity int) *DeduplicationCache {
 	if capacity <= 0 {
-		capacity = 1000 // Valor padrão
+		capacity = 1000 // Default value
 	}
 
-	// Cria sentinelas para head e tail
+	// Create sentinels for head and tail
 	head := &cacheNode{}
 	tail := &cacheNode{}
 	head.next = tail
@@ -42,7 +42,7 @@ func NewDeduplicationCache(capacity int) *DeduplicationCache {
 	}
 }
 
-// Contains verifica se o ID está no cache
+// Contains checks if the ID is in the cache
 func (dc *DeduplicationCache) Contains(id uuid.UUID) bool {
 	dc.mutex.RLock()
 	defer dc.mutex.RUnlock()
@@ -51,37 +51,37 @@ func (dc *DeduplicationCache) Contains(id uuid.UUID) bool {
 	return exists
 }
 
-// Add adiciona um ID ao cache (move para o início se já existe)
+// Add inserts an ID into the cache (moves it to the head if it already exists)
 func (dc *DeduplicationCache) Add(id uuid.UUID) {
 	dc.mutex.Lock()
 	defer dc.mutex.Unlock()
 
 	if node, exists := dc.cache[id]; exists {
-		// Move para o início (mais recente)
+		// Move to the head (most recently used)
 		dc.moveToHead(node)
 		return
 	}
 
-	// Cria novo nó
+	// Create new node
 	newNode := &cacheNode{key: id}
 	dc.cache[id] = newNode
 	dc.addToHead(newNode)
 
-	// Remove o menos recente se exceder capacidade
+	// Remove least recently used if over capacity
 	if len(dc.cache) > dc.capacity {
 		tail := dc.removeTail()
 		delete(dc.cache, tail.key)
 	}
 }
 
-// Size retorna o tamanho atual do cache
+// Size returns the current cache size
 func (dc *DeduplicationCache) Size() int {
 	dc.mutex.RLock()
 	defer dc.mutex.RUnlock()
 	return len(dc.cache)
 }
 
-// Clear limpa todo o cache
+// Clear removes all entries from the cache
 func (dc *DeduplicationCache) Clear() {
 	dc.mutex.Lock()
 	defer dc.mutex.Unlock()
@@ -91,7 +91,7 @@ func (dc *DeduplicationCache) Clear() {
 	dc.tail.prev = dc.head
 }
 
-// GetStats retorna estatísticas do cache
+// GetStats returns cache statistics
 func (dc *DeduplicationCache) GetStats() map[string]interface{} {
 	dc.mutex.RLock()
 	defer dc.mutex.RUnlock()
@@ -103,7 +103,7 @@ func (dc *DeduplicationCache) GetStats() map[string]interface{} {
 	}
 }
 
-// addToHead adiciona nó após a cabeça
+// addToHead inserts a node right after the head
 func (dc *DeduplicationCache) addToHead(node *cacheNode) {
 	node.prev = dc.head
 	node.next = dc.head.next
@@ -111,19 +111,19 @@ func (dc *DeduplicationCache) addToHead(node *cacheNode) {
 	dc.head.next = node
 }
 
-// removeNode remove um nó específico
+// removeNode removes a specific node
 func (dc *DeduplicationCache) removeNode(node *cacheNode) {
 	node.prev.next = node.next
 	node.next.prev = node.prev
 }
 
-// moveToHead move nó para após a cabeça
+// moveToHead moves a node to right after the head
 func (dc *DeduplicationCache) moveToHead(node *cacheNode) {
 	dc.removeNode(node)
 	dc.addToHead(node)
 }
 
-// removeTail remove e retorna o nó antes da cauda
+// removeTail removes and returns the node before the tail
 func (dc *DeduplicationCache) removeTail() *cacheNode {
 	lastNode := dc.tail.prev
 	dc.removeNode(lastNode)

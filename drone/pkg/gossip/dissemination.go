@@ -11,7 +11,7 @@ import (
 	"github.com/heitortanoue/tcc/pkg/state"
 )
 
-// DeltaMsg representa uma mensagem de delta com TTL para disseminação
+// DeltaMsg represents a delta message with TTL for dissemination
 type DeltaMsg struct {
 	ID        uuid.UUID      `json:"id"`
 	TTL       int            `json:"ttl"`
@@ -20,40 +20,40 @@ type DeltaMsg struct {
 	Timestamp int64          `json:"timestamp"`
 }
 
-// DisseminationSystem gerencia disseminação TTL (Requisito F4)
+// DisseminationSystem manages TTL-based dissemination (Requirement F4)
 type DisseminationSystem struct {
 	droneID    string
-	fanout     int // Fan-out fixo para 3 vizinhos
-	defaultTTL int // TTL inicial padrão
+	fanout     int // Fan-out (number of neighbors)
+	defaultTTL int // Default initial TTL
 
-	// Interfaces para comunicação
+	// Communication interfaces
 	neighborGetter NeighborGetter
 	tcpSender      TCPSender
 	cache          *DeduplicationCache
 
-	// Controle de execução
+	// Execution control
 	running bool
 	stopCh  chan struct{}
 	mutex   sync.RWMutex
 
-	// Métricas
+	// Metrics
 	sentCount     int64
 	receivedCount int64
-	droppedCount  int64 // Por TTL=0 ou duplicatas
+	droppedCount  int64 // Due to TTL=0 or duplicates
 }
 
-// NeighborGetter interface para obter vizinhos
+// NeighborGetter interface to obtain neighbors
 type NeighborGetter interface {
 	GetNeighborURLs() []string
 	Count() int
 }
 
-// TCPSender interface para envio TCP
+// TCPSender interface for TCP sending
 type TCPSender interface {
 	SendDelta(url string, delta DeltaMsg) error
 }
 
-// NewDisseminationSystem cria um novo sistema de disseminação
+// NewDisseminationSystem creates a new dissemination system
 func NewDisseminationSystem(droneID string, fanout, defaultTTL int, neighborGetter NeighborGetter, tcpSender TCPSender) *DisseminationSystem {
 	return &DisseminationSystem{
 		droneID:        droneID,
@@ -61,13 +61,13 @@ func NewDisseminationSystem(droneID string, fanout, defaultTTL int, neighborGett
 		defaultTTL:     defaultTTL,
 		neighborGetter: neighborGetter,
 		tcpSender:      tcpSender,
-		cache:          NewDeduplicationCache(10000), // Cache de 10k IDs
+		cache:          NewDeduplicationCache(10000), // Cache of 10k IDs
 		running:        false,
 		stopCh:         make(chan struct{}),
 	}
 }
 
-// Start inicia o sistema de disseminação
+// Start begins the dissemination system
 func (ds *DisseminationSystem) Start() {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
@@ -78,15 +78,15 @@ func (ds *DisseminationSystem) Start() {
 
 	ds.running = true
 
-	// inicia heartbeat de push periódico
-	log.Printf("[DISSEMINATION] Iniciando heartbeat para disseminação de delta")
+	// Starts periodic heartbeat for delta push
+	log.Printf("[DISSEMINATION] Starting heartbeat for delta dissemination")
 	go ds.startHeartbeat()
 
-	log.Printf("[DISSEMINATION] Iniciando sistema de disseminação para %s (fanout: %d, TTL: %d)",
+	log.Printf("[DISSEMINATION] Dissemination system started for %s (fanout: %d, TTL: %d)",
 		ds.droneID, ds.fanout, ds.defaultTTL)
 }
 
-// Stop para o sistema de disseminação
+// Stop halts the dissemination system
 func (ds *DisseminationSystem) Stop() {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
@@ -97,10 +97,10 @@ func (ds *DisseminationSystem) Stop() {
 
 	ds.running = false
 	close(ds.stopCh)
-	log.Printf("[DISSEMINATION] Parando sistema de disseminação para %s", ds.droneID)
+	log.Printf("[DISSEMINATION] Stopping dissemination system for %s", ds.droneID)
 }
 
-// DisseminateDelta dissemina um delta para vizinhos com TTL
+// DisseminateDelta disseminates a delta to neighbors with TTL
 func (ds *DisseminationSystem) DisseminateDelta(delta crdt.FireDelta) error {
 	ds.mutex.RLock()
 	if !ds.running {
@@ -109,7 +109,7 @@ func (ds *DisseminationSystem) DisseminateDelta(delta crdt.FireDelta) error {
 	}
 	ds.mutex.RUnlock()
 
-	// Cria mensagem com TTL inicial
+	// Create message with initial TTL
 	msg := DeltaMsg{
 		ID:        uuid.New(),
 		TTL:       ds.defaultTTL,
@@ -121,60 +121,60 @@ func (ds *DisseminationSystem) DisseminateDelta(delta crdt.FireDelta) error {
 	return ds.forwardDelta(msg)
 }
 
-// ProcessReceivedDelta processa delta recebido de outro nó
+// ProcessReceivedDelta processes a delta received from another node
 func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 	ds.mutex.Lock()
 	ds.receivedCount++
 	ds.mutex.Unlock()
 
-	// Verifica deduplicação
+	// Deduplication check
 	if ds.cache.Contains(msg.ID) {
 		ds.mutex.Lock()
 		ds.droppedCount++
 		ds.mutex.Unlock()
-		log.Printf("[DISSEMINATION] Delta %s descartado (duplicata)", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] Delta %s discarded (duplicate)", msg.ID.String()[:8])
 		return nil
 	}
 
-	// Adiciona ao cache
+	// Add to cache
 	ds.cache.Add(msg.ID)
 
-	// Verifica TTL
+	// TTL check
 	if msg.TTL <= 0 {
 		ds.mutex.Lock()
 		ds.droppedCount++
 		ds.mutex.Unlock()
-		log.Printf("[DISSEMINATION] Delta %s descartado (TTL=0)", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] Delta %s discarded (TTL=0)", msg.ID.String()[:8])
 		return nil
 	}
 
-	log.Printf("[DISSEMINATION] Processando delta %s (TTL: %d)", msg.ID.String()[:8], msg.TTL)
+	log.Printf("[DISSEMINATION] Processing delta %s (TTL: %d)", msg.ID.String()[:8], msg.TTL)
 
-	// Aplica o delta recebido ao estado local do drone
+	// Apply received delta to local state
 	state.MergeDelta(msg.Data)
 
-	// Decrementa TTL e continua disseminação
+	// Decrement TTL and continue dissemination
 	msg.TTL--
-	msg.SenderID = ds.droneID // Atualiza sender para este nó
+	msg.SenderID = ds.droneID // Update sender to this node
 
 	return ds.forwardDelta(msg)
 }
 
-// forwardDelta envia delta para até 'fanout' vizinhos
+// forwardDelta sends delta to up to 'fanout' neighbors
 func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 	neighbors := ds.neighborGetter.GetNeighborURLs()
 	if len(neighbors) == 0 {
-		log.Printf("[DISSEMINATION] Nenhum vizinho disponível para delta %s", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] No neighbors available for delta %s", msg.ID.String()[:8])
 		return nil
 	}
 
-	// Limita ao fanout configurado
+	// Limit to configured fanout
 	targetCount := ds.fanout
 	if len(neighbors) < targetCount {
 		targetCount = len(neighbors)
 	}
 
-	// Seleciona vizinhos aleatoriamente (estratégia simples)
+	// Randomly select neighbors (simple strategy)
 	targets := selectRandomNeighbors(neighbors, targetCount)
 
 	var errors []error
@@ -182,7 +182,7 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 
 	for _, url := range targets {
 		if err := ds.tcpSender.SendDelta(url, msg); err != nil {
-			log.Printf("[DISSEMINATION] Erro ao enviar delta %s para %s: %v",
+			log.Printf("[DISSEMINATION] Error sending delta %s to %s: %v",
 				msg.ID.String()[:8], url, err)
 			errors = append(errors, err)
 		} else {
@@ -194,27 +194,27 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 	ds.sentCount += int64(successCount)
 	ds.mutex.Unlock()
 
-	log.Printf("[DISSEMINATION] Delta %s enviado para %d/%d vizinhos",
+	log.Printf("[DISSEMINATION] Delta %s sent to %d/%d neighbors",
 		msg.ID.String()[:8], successCount, len(targets))
 
 	if len(errors) > 0 {
-		return errors[0] // Retorna primeiro erro
+		return errors[0] // Return the first error
 	}
 
 	return nil
 }
 
-// selectRandomNeighbors seleciona até 'count' vizinhos aleatoriamente
+// selectRandomNeighbors selects up to 'count' neighbors randomly
 func selectRandomNeighbors(neighbors []string, count int) []string {
 	if len(neighbors) <= count {
 		return neighbors
 	}
 
-	// Cria uma cópia para não modificar o original
+	// Copy to avoid modifying original
 	shuffled := make([]string, len(neighbors))
 	copy(shuffled, neighbors)
 
-	// Fisher-Yates shuffle simples
+	// Fisher-Yates shuffle
 	for i := len(shuffled) - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
@@ -223,28 +223,28 @@ func selectRandomNeighbors(neighbors []string, count int) []string {
 	return shuffled[:count]
 }
 
-// startHeartbeat dispara periodicamente envio de delta local
+// startHeartbeat periodically triggers sending of local delta
 func (ds *DisseminationSystem) startHeartbeat() {
-	ticker := time.NewTicker(5 * time.Second) // intervalo de heartbeat
+	ticker := time.NewTicker(5 * time.Second) // heartbeat interval
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			log.Printf("[DISSEMINATION] Iniciando heartbeat para disseminação de delta")
+			log.Printf("[DISSEMINATION] Heartbeat triggered for delta dissemination")
 
-			// extrai delta local do estado do drone
+			// Extract local delta from drone state
 			delta := state.GenerateDelta()
-			// só envia se houver mudanças pendentes
+			// Only send if there are pending changes
 			if delta != nil && len(delta.Entries) > 0 {
-				log.Printf("[DISSEMINATION] Gerando delta com %d entradas", len(delta.Entries))
+				log.Printf("[DISSEMINATION] Generating delta with %d entries", len(delta.Entries))
 				err := ds.DisseminateDelta(*delta)
 				if err != nil {
-					log.Printf("[DISSEMINATION] Erro ao disseminar delta: %v", err)
+					log.Printf("[DISSEMINATION] Error disseminating delta: %v", err)
 				} else {
-					// Limpa o delta após disseminação bem-sucedida
+					// Clear delta after successful dissemination
 					state.ClearDelta()
-					log.Printf("[DISSEMINATION] Delta disseminado com %d entradas", len(delta.Entries))
+					log.Printf("[DISSEMINATION] Delta disseminated with %d entries", len(delta.Entries))
 				}
 			}
 		case <-ds.stopCh:
@@ -253,7 +253,7 @@ func (ds *DisseminationSystem) startHeartbeat() {
 	}
 }
 
-// GetStats retorna estatísticas do sistema de disseminação
+// GetStats returns dissemination system statistics
 func (ds *DisseminationSystem) GetStats() map[string]interface{} {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
@@ -270,7 +270,7 @@ func (ds *DisseminationSystem) GetStats() map[string]interface{} {
 	}
 }
 
-// IsRunning retorna se o sistema está executando
+// IsRunning returns whether the system is running
 func (ds *DisseminationSystem) IsRunning() bool {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()

@@ -4,6 +4,7 @@ import "testing"
 
 // ---------- helpers -------------------------------------------------------
 
+// equal compares two sets represented as map[E]struct{}
 func equal[E comparable](a, b map[E]struct{}) bool {
 	if len(a) != len(b) {
 		return false
@@ -16,7 +17,7 @@ func equal[E comparable](a, b map[E]struct{}) bool {
 	return true
 }
 
-// copia lógica – produz um conjunto de elementos a partir de um AWOR-Set
+// elems builds a set of elements from an AWOR-Set
 func elems[E comparable](s *AWORSet[E]) map[E]struct{} {
 	out := make(map[E]struct{}, len(s.Elements()))
 	for _, v := range s.Elements() {
@@ -33,34 +34,34 @@ func TestAddRemove(t *testing.T) {
 
 	s.Add("A", "go")
 	if _, ok := elems(s)["go"]; !ok {
-		t.Fatalf("esperava conter 'go' após Add")
+		t.Fatalf("expected to contain 'go' after Add")
 	}
 
 	s.Remove("go")
 	if _, ok := elems(s)["go"]; ok {
-		t.Fatalf("esperava não conter 'go' após Remove")
+		t.Fatalf("expected not to contain 'go' after Remove")
 	}
 }
 
 // -------------------------------------------------------------------------
-// 2. Add wins x Remove concorrente
+// 2. Add wins vs Concurrent Remove
 // -------------------------------------------------------------------------
 func TestAddWinsConcurrent(t *testing.T) {
-	// Estado inicial com "x"
+	// Initial state with "x"
 	seed := NewAWORSet[string]()
 	seed.Add("S", "x")
 
-	// Réplicas A e B partem do mesmo estado
+	// Replicas A and B start from the same state
 	a := NewAWORSet[string]()
 	b := NewAWORSet[string]()
 	a.Merge(seed)
 	b.Merge(seed)
 
-	// Operações concorrentes…
-	a.Add("A", "x") // novo dot ⟶ Add
-	b.Remove("x")   // Remove só dots já observados
+	// Concurrent operations
+	a.Add("A", "x") // new dot -> Add
+	b.Remove("x")   // Remove only observed dots
 
-	// …e propagação
+	// Propagation
 	a.Merge(b)
 	b.Merge(a)
 
@@ -69,12 +70,12 @@ func TestAddWinsConcurrent(t *testing.T) {
 		_, bok := elems(b)["x"]
 		return aok && bok
 	}()) {
-		t.Fatalf("Add não venceu Remove na presença de concorrência")
+		t.Fatalf("Add did not win over Remove under concurrency")
 	}
 }
 
 // -------------------------------------------------------------------------
-// 3. Conmutatividade
+// 3. Commutativity
 // -------------------------------------------------------------------------
 func TestMergeCommutative(t *testing.T) {
 	a := NewAWORSet[string]()
@@ -91,12 +92,12 @@ func TestMergeCommutative(t *testing.T) {
 	right.Merge(a)
 
 	if !equal(elems(left), elems(right)) {
-		t.Fatalf("merge não é comutativo – %v vs %v", elems(left), elems(right))
+		t.Fatalf("merge is not commutative – %v vs %v", elems(left), elems(right))
 	}
 }
 
 // -------------------------------------------------------------------------
-// 4. Associatividade
+// 4. Associativity
 // -------------------------------------------------------------------------
 func TestMergeAssociative(t *testing.T) {
 	a := NewAWORSet[string]()
@@ -124,12 +125,12 @@ func TestMergeAssociative(t *testing.T) {
 	right.Merge(bc) // A ⊔ (B ⊔ C)
 
 	if !equal(elems(left), elems(right)) {
-		t.Fatalf("merge não é associativo – %v vs %v", elems(left), elems(right))
+		t.Fatalf("merge is not associative – %v vs %v", elems(left), elems(right))
 	}
 }
 
 // -------------------------------------------------------------------------
-// 5. Idempotência
+// 5. Idempotence
 // -------------------------------------------------------------------------
 func TestMergeIdempotent(t *testing.T) {
 	s := NewAWORSet[string]()
@@ -137,18 +138,18 @@ func TestMergeIdempotent(t *testing.T) {
 
 	before := elems(s)
 
-	s.Merge(s) // merge consigo mesmo
+	s.Merge(s) // merge with itself
 
 	if !equal(before, elems(s)) {
-		t.Fatalf("merge não é idempotente – antes %v, depois %v", before, elems(s))
+		t.Fatalf("merge is not idempotent – before %v, after %v", before, elems(s))
 	}
 }
 
 // -------------------------------------------------------------------------
-// 6. Testes adicionais de remoção e semânticas
+// 6. Additional removal and semantic tests
 // -------------------------------------------------------------------------
 
-// TestMultipleAdds verifica que múltiplas adições acumulam elementos
+// TestMultipleAdds checks that multiple additions accumulate elements
 func TestMultipleAdds(t *testing.T) {
 	s := NewAWORSet[string]()
 	s.Add("A", "a")
@@ -156,11 +157,11 @@ func TestMultipleAdds(t *testing.T) {
 	got := elems(s)
 	want := map[string]struct{}{"a": {}, "b": {}}
 	if !equal(got, want) {
-		t.Fatalf("esperava %v, obteve %v", want, got)
+		t.Fatalf("expected %v, got %v", want, got)
 	}
 }
 
-// TestRemoveWinsWithoutConcurrentAdd testa remoção sem adição concorrente
+// TestRemoveWinsWithoutConcurrentAdd checks remove without concurrent add
 func TestRemoveWinsWithoutConcurrentAdd(t *testing.T) {
 	seed := NewAWORSet[string]()
 	seed.Add("S", "x")
@@ -175,11 +176,11 @@ func TestRemoveWinsWithoutConcurrentAdd(t *testing.T) {
 	b.Merge(a)
 
 	if _, oka := elems(a)["x"]; oka || func() bool { _, okb := elems(b)["x"]; return okb }() {
-		t.Fatalf("esperava 'x' removido, mas ainda presente em A:%v B:%v", elems(a), elems(b))
+		t.Fatalf("expected 'x' removed, but still present in A:%v B:%v", elems(a), elems(b))
 	}
 }
 
-// TestAddWinsOnConcurrentRemoveAndAdd verifica semântica add-vs-remove concorrente
+// TestAddWinsOnConcurrentRemoveAndAdd verifies add-vs-remove concurrency semantics
 func TestAddWinsOnConcurrentRemoveAndAdd(t *testing.T) {
 	seed := NewAWORSet[string]()
 	seed.Add("S", "x")
@@ -195,31 +196,31 @@ func TestAddWinsOnConcurrentRemoveAndAdd(t *testing.T) {
 	b.Merge(a)
 
 	if !equal(elems(a), elems(b)) || func() bool { _, ok := elems(a)["x"]; return !ok }() {
-		t.Fatalf("esperava 'x' presente após add-vs-remove concorrente, obteve A:%v B:%v", elems(a), elems(b))
+		t.Fatalf("expected 'x' present after concurrent add-vs-remove, got A:%v B:%v", elems(a), elems(b))
 	}
 }
 
-// TestReAddAfterRemove verifica que reedição depois de remoção funciona
+// TestReAddAfterRemove checks re-adding after removal
 func TestReAddAfterRemove(t *testing.T) {
 	s := NewAWORSet[string]()
 	s.Add("A", "go")
 	s.Remove("go")
 	s.Add("A", "go")
 	if _, ok := elems(s)["go"]; !ok {
-		t.Fatalf("esperava 'go' presente após remoção e nova adição")
+		t.Fatalf("expected 'go' present after remove and re-add")
 	}
 }
 
-// TestRemoveNonExistent verifica que remover elemento inexistente não causa erro
+// TestRemoveNonExistent checks removing a non-existent element does nothing
 func TestRemoveNonExistent(t *testing.T) {
 	s := NewAWORSet[string]()
 	s.Remove("nope")
 	if len(s.Elements()) != 0 {
-		t.Fatalf("esperava conjunto vazio após remover elemento inexistente, obteve %v", s.Elements())
+		t.Fatalf("expected empty set after removing non-existent element, got %v", s.Elements())
 	}
 }
 
-// TestMultipleElementsRemoveOne verifica remoção seletiva
+// TestMultipleElementsRemoveOne checks selective removal
 func TestMultipleElementsRemoveOne(t *testing.T) {
 	s := NewAWORSet[string]()
 	s.Add("A", "a")
@@ -228,6 +229,6 @@ func TestMultipleElementsRemoveOne(t *testing.T) {
 	got := elems(s)
 	want := map[string]struct{}{"b": {}}
 	if !equal(got, want) {
-		t.Fatalf("esperava %v após remover 'a', obteve %v", want, got)
+		t.Fatalf("expected %v after removing 'a', got %v", want, got)
 	}
 }

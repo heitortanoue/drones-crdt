@@ -10,41 +10,41 @@ import (
 	"github.com/heitortanoue/tcc/pkg/protocol"
 )
 
-// Neighbor representa um vizinho descoberto via UDP
+// Neighbor represents a neighbor discovered via UDP
 type Neighbor struct {
 	IP       net.IP    `json:"ip"`
-	Port     int       `json:"port"`    // porta TCP para dados
-	ID       string    `json:"id"`      // ID do drone (UUID)
-	Version  int       `json:"version"` // último delta do drone
+	Port     int       `json:"port"`    // TCP port for data
+	ID       string    `json:"id"`      // Drone ID (UUID)
+	Version  int       `json:"version"` // Last delta version of the drone
 	LastSeen time.Time `json:"last_seen"`
 }
 
-// NeighborTable gerencia a tabela de vizinhos descobertos
+// NeighborTable manages the table of discovered neighbors
 type NeighborTable struct {
-	neighbors map[string]*Neighbor // chave: IP como string
+	neighbors map[string]*Neighbor // key: Drone ID
 	mutex     sync.RWMutex
 	timeout   time.Duration
 }
 
-// NewNeighborTable cria uma nova tabela de vizinhos
+// NewNeighborTable creates a new neighbor table
 func NewNeighborTable(timeout time.Duration) *NeighborTable {
 	nt := &NeighborTable{
 		neighbors: make(map[string]*Neighbor),
 		timeout:   timeout,
 	}
 
-	// Inicia goroutine para limpeza de vizinhos expirados
+	// Start goroutine for cleaning up expired neighbors
 	go nt.cleanupExpired()
 
 	return nt
 }
 
-// AddOrUpdate adiciona ou atualiza um vizinho
+// AddOrUpdate adds or updates a neighbor entry
 func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, port int) {
 	nt.mutex.Lock()
 	defer nt.mutex.Unlock()
 
-	key := hello.ID // Usando ID como chave para unicidade
+	key := hello.ID // Use drone ID as unique key
 
 	nt.neighbors[key] = &Neighbor{
 		IP:       ip,
@@ -57,7 +57,7 @@ func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, por
 	log.Println(nt.String())
 }
 
-// GetActiveNeighbors retorna vizinhos ativos (não expirados)
+// GetActiveNeighbors returns only active (non-expired) neighbors
 func (nt *NeighborTable) GetActiveNeighbors() []*Neighbor {
 	nt.mutex.RLock()
 	defer nt.mutex.RUnlock()
@@ -74,7 +74,7 @@ func (nt *NeighborTable) GetActiveNeighbors() []*Neighbor {
 	return active
 }
 
-// GetNeighborURLs retorna URLs HTTP dos vizinhos ativos
+// GetNeighborURLs returns HTTP URLs of active neighbors
 func (nt *NeighborTable) GetNeighborURLs() []string {
 	neighbors := nt.GetActiveNeighbors()
 	urls := make([]string, 0, len(neighbors))
@@ -87,12 +87,12 @@ func (nt *NeighborTable) GetNeighborURLs() []string {
 	return urls
 }
 
-// Count retorna o número de vizinhos ativos
+// Count returns the number of active neighbors
 func (nt *NeighborTable) Count() int {
 	return len(nt.GetActiveNeighbors())
 }
 
-// cleanupExpired remove vizinhos expirados periodicamente
+// cleanupExpired periodically removes expired neighbors
 func (nt *NeighborTable) cleanupExpired() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -101,7 +101,7 @@ func (nt *NeighborTable) cleanupExpired() {
 		nt.mutex.Lock()
 		now := time.Now()
 
-		// Remove vizinhos que não foram vistos dentro do timeout
+		// Remove neighbors not seen within timeout
 		for key, neighbor := range nt.neighbors {
 			if now.Sub(neighbor.LastSeen) >= nt.timeout {
 				delete(nt.neighbors, key)
@@ -112,7 +112,7 @@ func (nt *NeighborTable) cleanupExpired() {
 	}
 }
 
-// GetStats retorna estatísticas da tabela de vizinhos
+// GetStats returns neighbor table statistics
 func (nt *NeighborTable) GetStats() map[string]interface{} {
 	active := nt.GetActiveNeighbors()
 	urls := nt.GetNeighborURLs()
@@ -124,7 +124,7 @@ func (nt *NeighborTable) GetStats() map[string]interface{} {
 	}
 }
 
-// String retorna uma representação legível da tabela de vizinhos
+// String returns a human-readable representation of the neighbor table
 func (nt *NeighborTable) String() string {
 	result := "Neighbor Table:\n"
 	for _, neighbor := range nt.neighbors {

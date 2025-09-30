@@ -8,10 +8,10 @@ import (
 )
 
 func TestDroneStateBasic(t *testing.T) {
-	// Cria estado do drone
+	// Create drone state
 	ds := NewDroneState("drone1")
 
-	// Adiciona um fogo
+	// Add a fire
 	cell := crdt.Cell{X: 10, Y: 20}
 	meta := crdt.FireMeta{
 		Timestamp:  time.Now().UnixMilli(),
@@ -20,33 +20,33 @@ func TestDroneStateBasic(t *testing.T) {
 
 	ds.AddFire(cell, meta)
 
-	// Verifica se foi adicionado
+	// Verify it was added
 	fires := ds.GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo, encontrado %d", len(fires))
+		t.Errorf("Expected 1 fire, found %d", len(fires))
 	}
 
 	if fires[0] != cell {
-		t.Errorf("Célula não corresponde: esperado %+v, encontrado %+v", cell, fires[0])
+		t.Errorf("Cell mismatch: expected %+v, found %+v", cell, fires[0])
 	}
 
-	// Verifica metadados
+	// Verify metadata
 	storedMeta, exists := ds.GetFireMeta(cell)
 	if !exists {
-		t.Error("Metadados não encontrados")
+		t.Error("Metadata not found")
 	}
 
 	if storedMeta.Confidence != meta.Confidence {
-		t.Errorf("Confiança não corresponde: esperado %f, encontrado %f",
+		t.Errorf("Confidence mismatch: expected %f, found %f",
 			meta.Confidence, storedMeta.Confidence)
 	}
 }
 
 func TestMergeDelta(t *testing.T) {
-	// Cria estado do drone
+	// Create drone state
 	ds := NewDroneState("drone1")
 
-	// Cria um delta simulado
+	// Create a simulated delta
 	delta := crdt.FireDelta{
 		Context: crdt.DotContext{
 			Clock:    make(crdt.VectorClock),
@@ -64,27 +64,27 @@ func TestMergeDelta(t *testing.T) {
 		},
 	}
 
-	// Aplica o delta
+	// Apply the delta
 	ds.MergeDelta(delta)
 
-	// Verifica se foi aplicado
+	// Verify it was applied
 	fires := ds.GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo após aplicar delta, encontrado %d", len(fires))
+		t.Errorf("Expected 1 fire after applying delta, found %d", len(fires))
 	}
 
 	expectedCell := crdt.Cell{X: 15, Y: 25}
 	if fires[0] != expectedCell {
-		t.Errorf("Célula do delta não corresponde: esperado %+v, encontrado %+v",
+		t.Errorf("Delta cell mismatch: expected %+v, found %+v",
 			expectedCell, fires[0])
 	}
 }
 
 func TestGlobalState(t *testing.T) {
-	// Inicializa estado global
+	// Initialize global state
 	InitGlobalState("test-drone")
 
-	// Adiciona fogo via função global
+	// Add fire via global function
 	cell := crdt.Cell{X: 5, Y: 15}
 	meta := crdt.FireMeta{
 		Timestamp:  time.Now().UnixMilli(),
@@ -93,23 +93,23 @@ func TestGlobalState(t *testing.T) {
 
 	AddFire(cell, meta)
 
-	// Verifica via função global
+	// Verify via global function
 	fires := GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo no estado global, encontrado %d", len(fires))
+		t.Errorf("Expected 1 fire in global state, found %d", len(fires))
 	}
 
-	// Verifica estatísticas
+	// Verify statistics
 	stats := GetStats()
 	if stats["active_fires"] != 1 {
-		t.Errorf("Estatísticas incorretas: %+v", stats)
+		t.Errorf("Incorrect statistics: %+v", stats)
 	}
 }
 
 func TestRemoveFire(t *testing.T) {
 	ds := NewDroneState("drone1")
 
-	// Adiciona fogo
+	// Add fire
 	cell := crdt.Cell{X: 30, Y: 40}
 	meta := crdt.FireMeta{
 		Timestamp:  time.Now().UnixMilli(),
@@ -118,18 +118,18 @@ func TestRemoveFire(t *testing.T) {
 
 	ds.AddFire(cell, meta)
 
-	// Verifica que foi adicionado
+	// Verify it was added
 	fires := ds.GetActiveFires()
 	if len(fires) != 1 {
-		t.Errorf("Esperado 1 fogo antes da remoção, encontrado %d", len(fires))
+		t.Errorf("Expected 1 fire before removal, found %d", len(fires))
 	}
 
-	// Remove o fogo
+	// Remove the fire
 	ds.RemoveFire(cell)
 
-	// Verifica que foi removido
+	// Verify it was removed
 	fires = ds.GetActiveFires()
 	if len(fires) != 0 {
-		t.Errorf("Esperado 0 fogos após remoção, encontrado %d", len(fires))
+		t.Errorf("Expected 0 fires after removal, found %d", len(fires))
 	}
 }

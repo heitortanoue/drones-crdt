@@ -5,24 +5,24 @@ import (
 	"time"
 )
 
-// FireReading representa uma leitura de detecção de incêndio
+// FireReading represents a fire detection reading
 type FireReading struct {
-	X          int     `json:"x"`          // Coordenada X da célula
-	Y          int     `json:"y"`          // Coordenada Y da célula
-	Confidence float64 `json:"confidence"` // Nível de confiança (0-100%)
-	Timestamp  int64   `json:"timestamp"`  // Timestamp em milissegundos
-	SensorID   string  `json:"sensor_id"`  // ID do sensor que fez a leitura
+	X          int     `json:"x"`          // X coordinate of the cell
+	Y          int     `json:"y"`          // Y coordinate of the cell
+	Confidence float64 `json:"confidence"` // Confidence level (0–100%)
+	Timestamp  int64   `json:"timestamp"`  // Timestamp in milliseconds
+	SensorID   string  `json:"sensor_id"`  // ID of the sensor that produced the reading
 }
 
-// FireSensor representa um sensor simples que coleta leituras
+// FireSensor represents a simple fire sensor that collects readings
 type FireSensor struct {
-	readings  []FireReading        // Lista de leituras acumuladas
-	generator *FireSensorGenerator // Gerador automático
-	sensorID  string               // ID único do sensor
-	mutex     sync.RWMutex         // Proteção para concorrência
+	readings  []FireReading        // Accumulated list of readings
+	generator *FireSensorGenerator // Automatic generator
+	sensorID  string               // Unique sensor ID
+	mutex     sync.RWMutex         // Concurrency protection
 }
 
-// NewFireSensor cria uma nova instância do sensor de incêndio
+// NewFireSensor creates a new fire sensor instance
 func NewFireSensor(sensorID string, sampleInterval time.Duration) *FireSensor {
 	generator := NewFireSensorGenerator(sensorID, sampleInterval)
 
@@ -32,28 +32,28 @@ func NewFireSensor(sensorID string, sampleInterval time.Duration) *FireSensor {
 		sensorID:  sensorID,
 	}
 
-	// Configura a referência circular para o gerador
+	// Set circular reference for the generator
 	generator.SetSensor(sensor)
 
 	return sensor
 }
 
-// Start inicia a coleta automática de dados
+// Start begins automatic data collection
 func (fs *FireSensor) Start() {
 	fs.generator.Start()
 }
 
-// Stop para a coleta automática
+// Stop halts automatic data collection
 func (fs *FireSensor) Stop() {
 	fs.generator.Stop()
 }
 
-// AddReading adiciona uma leitura à lista (usado pelo gerador e manualmente)
+// AddReading appends a reading to the list (used by the generator or manually)
 func (fs *FireSensor) AddReading(reading FireReading) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	// Adiciona o ID do sensor se não estiver definido
+	// Ensure the SensorID is set
 	if reading.SensorID == "" {
 		reading.SensorID = fs.sensorID
 	}
@@ -61,7 +61,7 @@ func (fs *FireSensor) AddReading(reading FireReading) {
 	fs.readings = append(fs.readings, reading)
 }
 
-// AddManualReading adiciona uma leitura manual (mais para testes)
+// AddManualReading adds a manual reading (mainly for testing purposes)
 func (fs *FireSensor) AddManualReading(x, y int, confidence float64) {
 	reading := FireReading{
 		X:          x,
@@ -73,33 +73,33 @@ func (fs *FireSensor) AddManualReading(x, y int, confidence float64) {
 	fs.AddReading(reading)
 }
 
-// GetReadings retorna todas as leituras acumuladas
+// GetReadings returns all accumulated readings
 func (fs *FireSensor) GetReadings() []FireReading {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	// Retorna uma cópia para evitar modificações concorrentes
+	// Return a copy to avoid concurrent modifications
 	readings := make([]FireReading, len(fs.readings))
 	copy(readings, fs.readings)
 	return readings
 }
 
-// GetAndClearReadings retorna todas as leituras e limpa a lista (para envio ao drone)
+// GetAndClearReadings returns all readings and clears the list (for drone transmission)
 func (fs *FireSensor) GetAndClearReadings() []FireReading {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	// Copia as leituras
+	// Copy readings
 	readings := make([]FireReading, len(fs.readings))
 	copy(readings, fs.readings)
 
-	// Limpa a lista
+	// Clear the list
 	fs.readings = fs.readings[:0]
 
 	return readings
 }
 
-// GetStats retorna estatísticas do sensor
+// GetStats returns sensor statistics
 func (fs *FireSensor) GetStats() map[string]interface{} {
 	fs.mutex.RLock()
 	readingCount := len(fs.readings)
@@ -112,7 +112,7 @@ func (fs *FireSensor) GetStats() map[string]interface{} {
 	}
 }
 
-// GenerateTimestamp cria um timestamp atual em milissegundos
+// GenerateTimestamp creates a current timestamp in milliseconds
 func GenerateTimestamp() int64 {
 	return time.Now().UnixMilli()
 }

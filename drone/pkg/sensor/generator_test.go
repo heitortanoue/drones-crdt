@@ -8,109 +8,109 @@ import (
 func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 	sensor := NewFireSensor("test-sensor", 100*time.Millisecond)
 
-	// Verifica estado inicial
+	// Check initial state
 	if sensor.generator.running {
-		t.Error("Generator não deveria estar rodando inicialmente")
+		t.Error("Generator should not be running initially")
 	}
 
 	stats := sensor.GetStats()
 	if stats["sensor_id"] != "test-sensor" {
-		t.Error("SensorID incorreto nas estatísticas")
+		t.Error("Incorrect SensorID in stats")
 	}
 
-	// Inicia o gerador
+	// Start the generator
 	sensor.Start()
 
 	if !sensor.generator.running {
-		t.Error("Generator deveria estar rodando após Start()")
+		t.Error("Generator should be running after Start()")
 	}
 
-	// Aguarda algumas gerações
+	// Wait for a few generations
 	time.Sleep(350 * time.Millisecond)
 
-	// Para o gerador
+	// Stop the generator
 	sensor.Stop()
 
 	if sensor.generator.running {
-		t.Error("Generator não deveria estar rodando após Stop()")
+		t.Error("Generator should not be running after Stop()")
 	}
 
-	// Verifica se leituras foram geradas
+	// Verify that readings were generated
 	readings := sensor.GetReadings()
 	if len(readings) < 2 {
-		t.Errorf("Esperado pelo menos 2 leituras geradas, obtido %d", len(readings))
+		t.Errorf("Expected at least 2 readings, got %d", len(readings))
 	}
 
-	// Verifica se as leituras estão na área correta
+	// Validate readings are within expected area
 	for _, reading := range readings {
 		if reading.X < sensor.generator.baseX || reading.X >= sensor.generator.baseX+sensor.generator.gridSize {
-			t.Errorf("Coordenada X fora da área esperada: %d", reading.X)
+			t.Errorf("X coordinate out of expected area: %d", reading.X)
 		}
 		if reading.Y < sensor.generator.baseY || reading.Y >= sensor.generator.baseY+sensor.generator.gridSize {
-			t.Errorf("Coordenada Y fora da área esperada: %d", reading.Y)
+			t.Errorf("Y coordinate out of expected area: %d", reading.Y)
 		}
 		if reading.Confidence < 0 || reading.Confidence > 100 {
-			t.Errorf("Confiança fora do range válido: %f", reading.Confidence)
+			t.Errorf("Confidence out of valid range: %f", reading.Confidence)
 		}
 		if reading.SensorID != "test-sensor" {
-			t.Errorf("SensorID incorreto na leitura: %s", reading.SensorID)
+			t.Errorf("Incorrect SensorID in reading: %s", reading.SensorID)
 		}
 	}
 }
 
 func TestFireSensor_ManualReadings(t *testing.T) {
-	sensor := NewFireSensor("manual-test-sensor", time.Hour) // Intervalo longo para não interferir
+	sensor := NewFireSensor("manual-test-sensor", time.Hour) // Long interval to avoid interference
 
-	// Adiciona leitura manual
+	// Add a manual reading
 	sensor.AddManualReading(15, 25, 85.5)
 
 	readings := sensor.GetReadings()
 	if len(readings) != 1 {
-		t.Errorf("Esperado 1 leitura manual, obtido %d", len(readings))
+		t.Errorf("Expected 1 manual reading, got %d", len(readings))
 	}
 
 	reading := readings[0]
 	if reading.X != 15 || reading.Y != 25 {
-		t.Error("Coordenadas da leitura manual incorretas")
+		t.Error("Incorrect coordinates in manual reading")
 	}
 	if reading.Confidence != 85.5 {
-		t.Error("Confiança da leitura manual incorreta")
+		t.Error("Incorrect confidence value in manual reading")
 	}
 	if reading.SensorID != "manual-test-sensor" {
-		t.Error("SensorID da leitura manual incorreto")
+		t.Error("Incorrect SensorID in manual reading")
 	}
 }
 
 func TestFireSensor_GetAndClearReadings(t *testing.T) {
 	sensor := NewFireSensor("clear-test-sensor", time.Hour)
 
-	// Adiciona algumas leituras
+	// Add a few readings
 	sensor.AddManualReading(10, 20, 75.0)
 	sensor.AddManualReading(15, 25, 80.0)
 	sensor.AddManualReading(20, 30, 90.0)
 
-	// Verifica que temos 3 leituras
+	// Verify we have 3 readings
 	readings := sensor.GetReadings()
 	if len(readings) != 3 {
-		t.Errorf("Esperado 3 leituras, obtido %d", len(readings))
+		t.Errorf("Expected 3 readings, got %d", len(readings))
 	}
 
-	// Obtém e limpa as leituras (simula envio para drone)
+	// Get and clear the readings (simulate sending to drone)
 	clearedReadings := sensor.GetAndClearReadings()
 	if len(clearedReadings) != 3 {
-		t.Errorf("Esperado 3 leituras no retorno, obtido %d", len(clearedReadings))
+		t.Errorf("Expected 3 readings returned, got %d", len(clearedReadings))
 	}
 
-	// Verifica que a lista foi limpa
+	// Verify the list was cleared
 	remainingReadings := sensor.GetReadings()
 	if len(remainingReadings) != 0 {
-		t.Errorf("Esperado 0 leituras após limpeza, obtido %d", len(remainingReadings))
+		t.Errorf("Expected 0 readings after clearing, got %d", len(remainingReadings))
 	}
 
-	// Adiciona nova leitura após limpeza
+	// Add a new reading after clearing
 	sensor.AddManualReading(5, 10, 60.0)
 	newReadings := sensor.GetReadings()
 	if len(newReadings) != 1 {
-		t.Errorf("Esperado 1 nova leitura, obtido %d", len(newReadings))
+		t.Errorf("Expected 1 new reading, got %d", len(newReadings))
 	}
 }

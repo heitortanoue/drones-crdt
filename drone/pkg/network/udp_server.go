@@ -10,12 +10,12 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-// getLocalIP detecta o IP real do container (não loopback)
+// getLocalIP detects the real container IP (not loopback)
 func (s *UDPServer) getLocalIP() (net.IP, error) {
-	// Tenta conectar a um endereço externo para descobrir o IP local
+	// Try connecting to an external address to discover the local IP
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return nil, fmt.Errorf("erro ao detectar IP local: %v", err)
+		return nil, fmt.Errorf("failed to detect local IP: %v", err)
 	}
 	defer conn.Close()
 
@@ -23,7 +23,7 @@ func (s *UDPServer) getLocalIP() (net.IP, error) {
 	return localAddr.IP, nil
 }
 
-// UDPServer gerencia comunicação UDP na porta 7000 (canal de controle)
+// UDPServer manages UDP communication on port 7000 (control channel)
 type UDPServer struct {
 	conn          *net.UDPConn
 	neighborTable *NeighborTable
@@ -33,9 +33,9 @@ type UDPServer struct {
 	localIP       net.IP
 }
 
-const MULTICAST_IP = "224.0.0.118" // IP multicast
+const MULTICAST_IP = "224.0.0.118" // Multicast group address
 
-// NewUDPServer cria um novo servidor UDP
+// NewUDPServer creates a new UDP server
 func NewUDPServer(droneID string, port int, neighborTable *NeighborTable) *UDPServer {
 	return &UDPServer{
 		droneID:       droneID,
@@ -45,48 +45,48 @@ func NewUDPServer(droneID string, port int, neighborTable *NeighborTable) *UDPSe
 	}
 }
 
-// Start inicia o servidor UDP
+// Start launches the UDP server
 func (s *UDPServer) Start() error {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
-		return fmt.Errorf("erro ao resolver endereço UDP: %v", err)
+		return fmt.Errorf("failed to resolve UDP address: %v", err)
 	}
 
 	s.conn, err = net.ListenUDP("udp", addr)
 	if err != nil {
-		return fmt.Errorf("erro ao iniciar servidor UDP: %v", err)
+		return fmt.Errorf("failed to start UDP server: %v", err)
 	}
 
-	// Detecta o IP real do container (não :: ou 0.0.0.0)
+	// Detect the real container IP (not :: or 0.0.0.0)
 	s.localIP, err = s.getLocalIP()
 	if err != nil {
-		log.Printf("[UDP] Aviso: erro ao detectar IP local: %v", err)
-		// Fallback: usa IP da conexão UDP
+		log.Printf("[UDP] Warning: failed to detect local IP: %v", err)
+		// Fallback: use the IP from the UDP connection
 		if la, ok := s.conn.LocalAddr().(*net.UDPAddr); ok {
 			s.localIP = la.IP
 		}
 	}
-	log.Printf("[UDP] IP local detectado: %s", s.localIP.String())
+	log.Printf("[UDP] Local IP detected: %s", s.localIP.String())
 
-	// Configura multicast
+	// Configure multicast
 	if err := s.setupMulticast(); err != nil {
 		s.conn.Close()
-		return fmt.Errorf("erro ao configurar multicast: %v", err)
+		return fmt.Errorf("failed to configure multicast: %v", err)
 	}
 
-	// Habilita configurações otimizadas para multicast
+	// Enable optimized settings for multicast
 	if err := s.enableBroadcast(); err != nil {
-		log.Fatalf("[UDP] ERRO: não foi possível otimizar para multicast: %v", err)
+		log.Fatalf("[UDP] ERROR: failed to optimize for multicast: %v", err)
 	}
 
 	s.running = true
-	log.Printf("[UDP] Servidor iniciado na porta %d (multicast habilitado)", s.port)
+	log.Printf("[UDP] Server started on port %d (multicast enabled)", s.port)
 
 	go s.handleIncomingPackets()
 	return nil
 }
 
-// Stop para o servidor UDP
+// Stop shuts down the UDP server
 func (s *UDPServer) Stop() error {
 	s.running = false
 	if s.conn != nil {
@@ -95,52 +95,51 @@ func (s *UDPServer) Stop() error {
 	return nil
 }
 
-// handleIncomingPackets processa pacotes UDP recebidos
+// handleIncomingPackets processes received UDP packets
 func (s *UDPServer) handleIncomingPackets() {
-	buffer := make([]byte, 2048) // Aumentado para comportar pacotes maiores
+	buffer := make([]byte, 2048) // Increased buffer size for larger packets
 
 	for s.running {
 		n, addr, err := s.conn.ReadFromUDP(buffer)
 		if err != nil {
 			if s.running {
-				log.Printf("[UDP] Erro ao ler pacote: %v", err)
+				log.Printf("[UDP] Error reading packet: %v", err)
 			}
 			continue
 		}
 
-		// Ignora pacotes enviados pelo próprio drone
+		// Ignore packets sent by the same drone
 		if addr.IP.Equal(s.localIP) {
 			continue
 		}
 
-		log.Printf("[UDP] Pacote recebido de %s:%d (%d bytes)", addr.IP.String(), addr.Port, n)
+		log.Printf("[UDP] Packet received from %s:%d (%d bytes)", addr.IP.String(), addr.Port, n)
 
-		// Processa o conteúdo do pacote
+		// Process the packet contents
 		go s.processPacket(buffer[:n], addr)
 	}
 }
 
-// processPacket processa um pacote UDP específico
+// processPacket handles a specific UDP packet
 func (s *UDPServer) processPacket(data []byte, addr *net.UDPAddr) {
-	// Processa mensagem HELLO
 	var helloMsg = protocol.HelloMessage{}
 
+	// Process HELLO message
 	if err := json.Unmarshal(data, &helloMsg); err == nil && helloMsg.ID != "" {
-		// Atualiza neighborTable com informações da mensagem HELLO
-		s.neighborTable.AddOrUpdate(helloMsg, addr.IP, 8080) // Porta TCP fixa 8080
-		log.Printf("[UDP] Vizinho descoberto via HELLO: %s (TCP:8080)",
-			addr.IP.String())
+		// Update neighborTable with HELLO message information
+		s.neighborTable.AddOrUpdate(helloMsg, addr.IP, 8080) // Fixed TCP port 8080
+		log.Printf("[UDP] Neighbor discovered via HELLO: %s (TCP:8080)", addr.IP.String())
 		return
 	}
 
-	// Se não é uma mensagem HELLO válida, apenas registra
-	log.Printf("[UDP] Pacote recebido não é uma mensagem HELLO válida")
+	// If not a valid HELLO message, just log it
+	log.Printf("[UDP] Packet received is not a valid HELLO message")
 }
 
-// SendPacket envia um pacote UDP para um endereço específico
+// SendPacket sends a UDP packet to a specific address
 func (s *UDPServer) SendPacket(data []byte, targetIP net.IP, targetPort int) error {
 	if s.conn == nil {
-		return fmt.Errorf("servidor UDP não iniciado")
+		return fmt.Errorf("UDP server not started")
 	}
 
 	addr := &net.UDPAddr{
@@ -150,34 +149,35 @@ func (s *UDPServer) SendPacket(data []byte, targetIP net.IP, targetPort int) err
 
 	_, err := s.conn.WriteToUDP(data, addr)
 	if err != nil {
-		return fmt.Errorf("erro ao enviar pacote UDP: %v", err)
+		return fmt.Errorf("failed to send UDP packet: %v", err)
 	}
 
-	log.Printf("[UDP] Pacote enviado para %s:%d (%d bytes)", targetIP.String(), targetPort, len(data))
+	log.Printf("[UDP] Packet sent to %s:%d (%d bytes)", targetIP.String(), targetPort, len(data))
 	return nil
 }
 
-// SendTo implementa interface UDPSender - envia para IP específico
+// SendTo implements UDPSender interface - sends to a specific IP
 func (s *UDPServer) SendTo(data []byte, targetIP string, targetPort int) error {
 	ip := net.ParseIP(targetIP)
 	if ip == nil {
-		return fmt.Errorf("IP inválido: %s", targetIP)
+		return fmt.Errorf("invalid IP: %s", targetIP)
 	}
 
 	return s.SendPacket(data, ip, targetPort)
 }
 
-// Broadcast envia exclusivamente via multicast.
-// Se o envio falhar, apenas registra o erro (sem fallback).
+// Broadcast sends exclusively via multicast.
+// If sending fails, it only logs the error (no fallback).
 func (s *UDPServer) Broadcast(data []byte) {
 	if err := s.Multicast(data); err != nil {
-		log.Printf("[UDP] ERRO multicast: %v (nenhum fallback aplicado)", err)
+		log.Printf("[UDP] ERROR multicast: %v (no fallback applied)", err)
 	}
 }
 
+// Multicast sends a packet to the multicast group
 func (s *UDPServer) Multicast(data []byte) error {
 	if s.conn == nil {
-		return fmt.Errorf("servidor UDP não iniciado")
+		return fmt.Errorf("UDP server not started")
 	}
 
 	multicastAddr := &net.UDPAddr{
@@ -187,87 +187,84 @@ func (s *UDPServer) Multicast(data []byte) error {
 
 	_, err := s.conn.WriteToUDP(data, multicastAddr)
 	if err != nil {
-		return fmt.Errorf("falha no envio multicast: %v", err)
+		return fmt.Errorf("multicast send failed: %v", err)
 	}
 	return nil
 }
 
-// enableBroadcast habilita configurações otimizadas para multicast
+// enableBroadcast enables optimized socket settings for multicast
 func (s *UDPServer) enableBroadcast() error {
 	if s.conn == nil {
-		return fmt.Errorf("conexão UDP não iniciada")
+		return fmt.Errorf("UDP connection not started")
 	}
 
-	// Define buffers para melhor performance de multicast
 	if err := s.conn.SetWriteBuffer(64 * 1024); err != nil {
-		log.Printf("[UDP] Aviso: erro ao definir buffer de escrita: %v", err)
+		log.Printf("[UDP] Warning: failed to set write buffer: %v", err)
 	}
 
 	if err := s.conn.SetReadBuffer(64 * 1024); err != nil {
-		log.Printf("[UDP] Aviso: erro ao definir buffer de leitura: %v", err)
+		log.Printf("[UDP] Warning: failed to set read buffer: %v", err)
 	}
 
-	log.Printf("[UDP] Socket configurado para broadcast")
+	log.Printf("[UDP] Socket configured for broadcast")
 	return nil
 }
 
-// setupMulticast configura o servidor para receber pacotes multicast
+// setupMulticast configures the server to receive multicast packets
 func (s *UDPServer) setupMulticast() error {
 	multicastGroup := net.ParseIP(MULTICAST_IP)
 	if multicastGroup == nil {
-		return fmt.Errorf("endereço multicast inválido")
+		return fmt.Errorf("invalid multicast address")
 	}
 
-	// Obtém a interface de rede padrão (Docker usa eth0)
+	// Get the default network interface (Docker usually uses eth0)
 	intf, err := net.InterfaceByName("eth0")
 	if err != nil {
-		// Fallback: usa a primeira interface disponível que não seja loopback
+		// Fallback: pick the first available non-loopback multicast interface
 		interfaces, err := net.Interfaces()
 		if err != nil {
-			return fmt.Errorf("erro ao obter interfaces de rede: %v", err)
+			return fmt.Errorf("failed to get network interfaces: %v", err)
 		}
 
 		for _, iface := range interfaces {
-			// Busca interface ativa, não-loopback e que suporte multicast
 			if iface.Flags&net.FlagUp != 0 &&
 				iface.Flags&net.FlagLoopback == 0 &&
 				iface.Flags&net.FlagMulticast != 0 {
 				intf = &iface
-				log.Printf("[UDP] Usando interface de rede: %s", iface.Name)
+				log.Printf("[UDP] Using network interface: %s", iface.Name)
 				break
 			}
 		}
 
 		if intf == nil {
-			return fmt.Errorf("nenhuma interface de rede válida encontrada")
+			return fmt.Errorf("no valid network interface found")
 		}
 	} else {
-		log.Printf("[UDP] Usando interface eth0 para multicast")
+		log.Printf("[UDP] Using eth0 interface for multicast")
 	}
 
-	// Cria um PacketConn IPv4 para multicast
+	// Create an IPv4 PacketConn for multicast
 	packetConn := ipv4.NewPacketConn(s.conn)
 
-	// Junta-se ao grupo multicast
+	// Join the multicast group
 	if err := packetConn.JoinGroup(intf, &net.UDPAddr{IP: multicastGroup, Port: s.port}); err != nil {
-		return fmt.Errorf("erro ao entrar no grupo multicast: %v", err)
+		return fmt.Errorf("failed to join multicast group: %v", err)
 	}
 
-	// Configura para receber pacotes multicast
+	// Configure to receive multicast packets
 	if err := packetConn.SetMulticastInterface(intf); err != nil {
-		log.Printf("[UDP] Aviso: erro ao definir interface multicast: %v", err)
+		log.Printf("[UDP] Warning: failed to set multicast interface: %v", err)
 	}
 
-	// Aumenta buffer de leitura na conexão UDP original
 	if err := s.conn.SetReadBuffer(65536); err != nil {
-		log.Printf("[UDP] Aviso: erro ao definir buffer de leitura: %v", err)
+		log.Printf("[UDP] Warning: failed to set read buffer: %v", err)
 	}
 
-	log.Printf("[UDP] Entrou no grupo multicast na interface %s", intf.Name)
+	log.Printf("[UDP] Joined multicast group on interface %s", intf.Name)
 	return nil
 }
 
-// GetStats retorna estatísticas do servidor UDP
+// GetStats returns UDP server statistics
 func (s *UDPServer) GetStats() map[string]interface{} {
 	return map[string]interface{}{
 		"udp_port": s.port,

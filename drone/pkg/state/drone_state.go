@@ -7,21 +7,21 @@ import (
 	"github.com/heitortanoue/tcc/pkg/crdt"
 )
 
-// DroneState mantém o estado atual do drone incluindo detecções de fogo
+// DroneState maintains the current state of the drone including fire detections
 type DroneState struct {
 	droneID string
 
-	// CRDT para células com fogo detectado
+	// CRDT for cells where fire has been detected
 	fires *crdt.AWORSet[crdt.Cell]
 
-	// Metadados das células (mapeamento Dot -> FireMeta)
+	// Metadata for cells (mapping Dot -> FireMeta)
 	metadata map[crdt.Dot]crdt.FireMeta
 
-	// Controle de concorrência
+	// Concurrency control
 	mutex sync.RWMutex
 }
 
-// NewDroneState cria uma nova instância do estado do drone
+// NewDroneState creates a new instance of the drone state
 func NewDroneState(droneID string) *DroneState {
 	return &DroneState{
 		droneID:  droneID,
@@ -30,12 +30,12 @@ func NewDroneState(droneID string) *DroneState {
 	}
 }
 
-// AddFire adiciona uma nova detecção de fogo ao estado local
+// AddFire adds a new fire detection to the local state
 func (ds *DroneState) AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	// Gera um novo dot e adiciona ao CRDT
+	// Generate a new dot and add it to the CRDT
 	if ds.fires.Delta == nil {
 		ds.fires.Delta = crdt.NewDotKernel[crdt.Cell]()
 	}
@@ -44,66 +44,64 @@ func (ds *DroneState) AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	ds.fires.Core.Entries[dot] = cell
 	ds.fires.Delta.Entries[dot] = cell
 
-	// Armazena metadados
+	// Store metadata
 	ds.metadata[dot] = meta
 
-	log.Printf("[STATE] Adicionada detecção de fogo em (%d, %d) com dot %s",
+	log.Printf("[STATE] Fire detection added at (%d, %d) with dot %s",
 		cell.X, cell.Y, dot.String()[:8])
 }
 
-// RemoveFire remove uma célula do estado (quando fogo é extinto)
+// RemoveFire removes a cell from the state (when fire is extinguished)
 func (ds *DroneState) RemoveFire(cell crdt.Cell) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
 	ds.fires.Remove(cell)
 
-	// Remove metadados das células removidas
+	// Remove metadata of removed cells
 	for dot, storedCell := range ds.fires.Core.Entries {
 		if storedCell == cell {
 			delete(ds.metadata, dot)
 		}
 	}
 
-	log.Printf("[STATE] Removida detecção de fogo em (%d, %d)", cell.X, cell.Y)
+	log.Printf("[STATE] Fire detection removed at (%d, %d)", cell.X, cell.Y)
 }
 
-// MergeDelta aplica um delta recebido de outro drone
+// MergeDelta applies a delta received from another drone
 func (ds *DroneState) MergeDelta(delta crdt.FireDelta) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	// log.Printf("[STATE] Aplicando delta recebido: %s", delta.String())
-
-	// 1) Reconstrói kernel temporário do delta
+	// 1) Rebuild a temporary kernel from the delta
 	kernel := &crdt.DotKernel[crdt.Cell]{
 		Context: &delta.Context,
 		Entries: make(map[crdt.Dot]crdt.Cell, len(delta.Entries)),
 	}
 
-	// 2) Preenche o mapa Dot→Cell e armazena metadados
+	// 2) Fill the Dot→Cell map and store metadata
 	for _, entry := range delta.Entries {
 		kernel.Entries[entry.Dot] = entry.Cell
 		ds.metadata[entry.Dot] = entry.Meta
 	}
 
-	// 3) Aplica merge apenas do estado CRDT
+	// 3) Apply merge of the CRDT state only
 	ds.fires.MergeDelta(kernel)
 
-	log.Printf("[STATE] Aplicado delta com %d entradas", len(delta.Entries))
+	log.Printf("[STATE] Delta applied with %d entries", len(delta.Entries))
 }
 
-// GenerateDelta gera um delta das mudanças locais para disseminação
+// GenerateDelta generates a delta of local changes for dissemination
 func (ds *DroneState) GenerateDelta() *crdt.FireDelta {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
 
 	if ds.fires.Delta == nil || len(ds.fires.Delta.Entries) == 0 {
-		log.Printf("[STATE] Nenhum delta para enviar (nenhuma mudança local)")
-		return nil // Nenhuma mudança local
+		log.Printf("[STATE] No delta to send (no local changes)")
+		return nil // No local changes
 	}
 
-	// Constrói o delta para envio
+	// Build the delta for dissemination
 	delta := &crdt.FireDelta{
 		Context: *ds.fires.Delta.Context,
 		Entries: make([]crdt.FireDeltaEntry, 0, len(ds.fires.Delta.Entries)),
@@ -112,7 +110,7 @@ func (ds *DroneState) GenerateDelta() *crdt.FireDelta {
 	for dot, cell := range ds.fires.Delta.Entries {
 		meta, exists := ds.metadata[dot]
 		if !exists {
-			// Metadados padrão se não encontrados
+			// Default metadata if not found
 			meta = crdt.FireMeta{
 				Timestamp:  0,
 				Confidence: 1.0,
@@ -129,7 +127,7 @@ func (ds *DroneState) GenerateDelta() *crdt.FireDelta {
 	return delta
 }
 
-// ClearDelta limpa o delta após disseminação
+// ClearDelta clears the delta after dissemination
 func (ds *DroneState) ClearDelta() {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
@@ -137,7 +135,7 @@ func (ds *DroneState) ClearDelta() {
 	ds.fires.Delta = nil
 }
 
-// GetActiveFires retorna todas as células ativas com fogo
+// GetActiveFires returns all active cells with fire
 func (ds *DroneState) GetActiveFires() []crdt.Cell {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
@@ -145,14 +143,14 @@ func (ds *DroneState) GetActiveFires() []crdt.Cell {
 	return ds.fires.Elements()
 }
 
+// GetLatestReadings returns the most recent fire metadata grouped by NodeID
 func (ds *DroneState) GetLatestReadings() map[string]crdt.FireMeta {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
 
-	// Cria um mapa para armazenar as leituras mais recentes
 	latestReadings := make(map[string]crdt.FireMeta)
 
-	// Itera sobre os metadados e seleciona o mais recente por célula
+	// Iterate over metadata and select the most recent one per node
 	for dot, meta := range ds.metadata {
 		if existingMeta, exists := latestReadings[dot.NodeID]; !exists || meta.Timestamp > existingMeta.Timestamp {
 			latestReadings[dot.NodeID] = meta
@@ -162,12 +160,12 @@ func (ds *DroneState) GetLatestReadings() map[string]crdt.FireMeta {
 	return latestReadings
 }
 
-// GetFireMeta retorna os metadados de uma célula específica
+// GetFireMeta returns metadata for a specific cell
 func (ds *DroneState) GetFireMeta(cell crdt.Cell) (crdt.FireMeta, bool) {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
 
-	// Procura a célula nos entries ativos
+	// Search the cell in the active entries
 	for dot, storedCell := range ds.fires.Core.Entries {
 		if storedCell == cell {
 			if meta, exists := ds.metadata[dot]; exists {
@@ -179,7 +177,7 @@ func (ds *DroneState) GetFireMeta(cell crdt.Cell) (crdt.FireMeta, bool) {
 	return crdt.FireMeta{}, false
 }
 
-// GetStats retorna estatísticas do estado
+// GetStats returns statistics about the state
 func (ds *DroneState) GetStats() map[string]interface{} {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
@@ -192,7 +190,7 @@ func (ds *DroneState) GetStats() map[string]interface{} {
 	}
 }
 
-// GetDroneID retorna o ID do drone
+// GetDroneID returns the drone ID
 func (ds *DroneState) GetDroneID() string {
 	return ds.droneID
 }

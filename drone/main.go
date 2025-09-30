@@ -20,19 +20,19 @@ import (
 	"github.com/heitortanoue/tcc/pkg/state"
 )
 
-var startTime = time.Now() // Para cálculo de uptime
+var startTime = time.Now() // For uptime calculation
 
 func main() {
-	// Flags da linha de comando (novos requisitos da Fase 1)
+	// Command line flags
 	var (
-		droneID   = flag.String("id", "drone-1", "ID único deste drone")
-		sampleSec = flag.Int("sample-sec", 10, "Intervalo de coleta de sensor em segundos")
-		fanout    = flag.Int("fanout", 3, "Número de vizinhos para gossip")
-		ttl       = flag.Int("ttl", 4, "TTL inicial para mensagens")
-		udpPort   = flag.Int("udp-port", 7000, "Porta UDP para controle")
-		tcpPort   = flag.Int("tcp-port", 8080, "Porta TCP para dados")
-		bindAddr  = flag.String("bind", "0.0.0.0", "Endereço para bind")
-		showUsage = flag.Bool("help", false, "Mostra ajuda de uso")
+		droneID   = flag.String("id", "drone-1", "Unique ID of this drone")
+		sampleSec = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
+		fanout    = flag.Int("fanout", 3, "Number of neighbors for gossip")
+		ttl       = flag.Int("ttl", 4, "Initial TTL for gossip messages")
+		udpPort   = flag.Int("udp-port", 7000, "UDP port for control")
+		tcpPort   = flag.Int("tcp-port", 8080, "TCP port for data")
+		bindAddr  = flag.String("bind", "0.0.0.0", "Bind address")
+		showUsage = flag.Bool("help", false, "Show usage help")
 	)
 	flag.Parse()
 
@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	// Cria configuração do drone
+	// Create drone configuration
 	cfg := config.DefaultConfig()
 	cfg.DroneID = *droneID
 	cfg.SampleInterval = time.Duration(*sampleSec) * time.Second
@@ -51,105 +51,95 @@ func main() {
 	cfg.TCPPort = *tcpPort
 	cfg.BindAddr = *bindAddr
 
-	// Cria tabela de vizinhos
+	// Neighbor table
 	neighborTable := network.NewNeighborTable(cfg.NeighborTimeout)
 
-	// Inicia estado global
+	// Initialize global state
 	state.InitGlobalState(cfg.DroneID)
 
-	// Cria sistema de sensores (Fase 2: F1 + F2)
+	// Sensor system
 	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval)
 
-	// Cria servidores UDP e TCP
+	// UDP and TCP servers
 	udpServer := network.NewUDPServer(cfg.DroneID, cfg.UDPPort, neighborTable)
 	tcpServer := network.NewTCPServer(cfg.DroneID, cfg.TCPPort)
 
-	// Cria sistema de controle (Fase 3: F3 + base F6)
+	// Control system
 	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer)
 
-	// Cria sistema de disseminação TTL
+	// Dissemination system with TTL gossip
 	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
 	disseminationSystem := gossip.NewDisseminationSystem(cfg.DroneID, cfg.Fanout, cfg.TTL, neighborTable, tcpSender)
 
-	// Integra handlers do sensor no TCP server
+	// Handlers integration
 	tcpServer.SensorHandler = createSensorHandler(sensorAPI, disseminationSystem)
 	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI, disseminationSystem)
 	tcpServer.StateHandler = createStateHandler(sensorAPI)
 	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, disseminationSystem)
 
-	// Setup graceful shutdown
+	// Graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		<-sigCh
-		fmt.Println("\nRecebido sinal de interrupção, desligando...")
+		fmt.Println("\nShutdown signal received, stopping...")
 
-		fmt.Println("Parando sistema de controle...")
+		fmt.Println("Stopping control system...")
 		controlSystem.Stop()
 
-		fmt.Println("Parando sistema de disseminação...")
+		fmt.Println("Stopping dissemination system...")
 		disseminationSystem.Stop()
 
-		fmt.Println("Parando coleta de sensores...")
+		fmt.Println("Stopping sensor collection...")
 		sensorAPI.Stop()
 
-		fmt.Println("Parando servidor UDP...")
+		fmt.Println("Stopping UDP server...")
 		if err := udpServer.Stop(); err != nil {
-			fmt.Printf("Erro ao parar UDP: %v\n", err)
+			fmt.Printf("Error stopping UDP: %v\n", err)
 		}
 
-		fmt.Println("Parando servidor TCP...")
+		fmt.Println("Stopping TCP server...")
 		if err := tcpServer.Stop(); err != nil {
-			fmt.Printf("Erro ao parar TCP: %v\n", err)
+			fmt.Printf("Error stopping TCP: %v\n", err)
 		}
 
 		os.Exit(0)
 	}()
 
-	// Mostra informações de inicialização
+	// Startup info
 	fmt.Printf("=== Drone %s ===\n", cfg.DroneID)
-	fmt.Printf("UDP (controle): %s:%d\n", cfg.BindAddr, cfg.UDPPort)
-	fmt.Printf("TCP (dados): http://%s:%d\n", cfg.BindAddr, cfg.TCPPort)
-	fmt.Printf("Coleta: a cada %v\n", cfg.SampleInterval)
+	fmt.Printf("UDP (control): %s:%d\n", cfg.BindAddr, cfg.UDPPort)
+	fmt.Printf("TCP (data): http://%s:%d\n", cfg.BindAddr, cfg.TCPPort)
+	fmt.Printf("Sampling: every %v\n", cfg.SampleInterval)
 	fmt.Printf("Gossip: fanout=%d, ttl=%d\n", cfg.Fanout, cfg.TTL)
-	fmt.Printf("Iniciando...\n\n")
-	// Inicia coleta automática de sensores (Fase 2: F1)
+	fmt.Printf("Starting...\n\n")
+
+	// Start components
 	sensorAPI.Start()
-
-	// Inicia sistema de controle (Fase 3: F3)
 	controlSystem.Start()
-
-	// Inicia sistema de disseminação (Fase 4: F4 + F7)
 	disseminationSystem.Start()
 
-	// Inicia servidor UDP
 	if err := udpServer.Start(); err != nil {
-		log.Fatalf("Erro ao iniciar servidor UDP: %v", err)
+		log.Fatalf("Error starting UDP server: %v", err)
 	}
 
-	// Inicia servidor TCP (bloqueia até terminar)
 	if err := tcpServer.Start(); err != nil {
-		log.Fatalf("Erro ao iniciar servidor TCP: %v", err)
+		log.Fatalf("Error starting TCP server: %v", err)
 	}
 }
 
-// printUsage mostra exemplos de uso
+// printUsage shows available options and endpoints
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `
-=== Drone Sistema de Sensores ===
+=== Drone Sensor System ===
 
 USAGE:
-  %s [opções]
+  %s [options]
 
 EXAMPLES:
-  # Drone básico
   %s -id=drone-1 -sample-sec=10
-
-  # Drone com configuração customizada
   %s -id=drone-2 -sample-sec=5 -fanout=2 -ttl=3
-
-  # Drone com portas específicas
   %s -id=drone-3 -udp-port=7001 -tcp-port=8081
 
 OPTIONS:
@@ -159,87 +149,60 @@ OPTIONS:
 
 	fmt.Fprintf(os.Stderr, `
 ENDPOINTS (TCP):
-  GET  /health     - Status do drone
-  POST /sensor     - Adiciona leitura de sensor (Fase 2)
-  POST /delta      - Recebe deltas de outros drones (Fase 2)
-  GET  /state      - Estado atual do CRDT (Fase 2)
-  GET  /stats      - Estatísticas do drone (Fase 5)
-  POST /neighbor   - Gerencia vizinhos (Fase 1)
-
-PROTOCOLS:
-  - UDP %d: Canal de controle (Hello)
-  - TCP %d: Canal de dados (HTTP REST API)
-  - Coleta automática de sensores a cada -sample-sec segundos
-  - Descoberta de vizinhos via pacotes UDP
-  - TTL gossip com fan-out configurável
-`, 7000, 8080)
+  POST /sensor     - Add a sensor reading
+  POST /delta      - Receive deltas from other drones
+  GET  /state      - Current CRDT state
+  GET  /stats      - Drone statistics
+`)
 }
 
-// Handlers HTTP para integração com sistema de sensores
-
-// createSensorHandler cria handler para POST /sensor
-//  O sensor vai enviar dados por aqui para o drone processar
+// createSensorHandler handles POST /sensor
 func createSensorHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		var reading sensor.FireReading
 		if err := json.NewDecoder(r.Body).Decode(&reading); err != nil {
-			http.Error(w, "JSON inválido", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
-		var cell crdt.Cell
-		cell.X = reading.X
-		cell.Y = reading.Y
-		var meta crdt.FireMeta
-		meta.Timestamp = reading.Timestamp
-		meta.Confidence = reading.Confidence
+		cell := crdt.Cell{X: reading.X, Y: reading.Y}
+		meta := crdt.FireMeta{Timestamp: reading.Timestamp, Confidence: reading.Confidence}
 
-		// Adiciona a leitura ao estado do drone
 		state.AddFire(cell, meta)
 
-		// if dissemination.IsRunning() {
-		// 	if err := dissemination.DisseminateDelta(delta); err != nil {
-		// 		log.Printf("[MAIN] Erro ao disseminar delta %s: %v", delta.ID.String()[:8], err)
-		// 	}
-		// }
-
 		response := map[string]interface{}{
-			"message": "Leitura adicionada com sucesso",
+			"message": "Reading successfully added",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
 }
 
-// createDeltaHandler cria handler para POST /delta
-// Este handler recebe deltas de outros drones e integra no CRDT local
+// createDeltaHandler handles POST /delta
 func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Tenta decodificar como DeltaMsg da disseminação (Fase 4)
 		var deltaMsg gossip.DeltaMsg
 		if err := json.NewDecoder(r.Body).Decode(&deltaMsg); err != nil {
-			http.Error(w, "JSON inválido", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
-		// Processa delta recebido via gossip
 		if dissemination.IsRunning() {
 			if err := dissemination.ProcessReceivedDelta(deltaMsg); err != nil {
-				log.Printf("[MAIN] Erro ao processar delta recebido: %v", err)
+				log.Printf("[MAIN] Error processing received delta: %v", err)
 			}
 		}
 
-		// Integra no CRDT local
 		state.MergeDelta(deltaMsg.Data)
 
 		response := map[string]interface{}{
@@ -254,11 +217,11 @@ func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Diss
 	}
 }
 
-// createStateHandler cria handler para GET /state
+// createStateHandler handles GET /state
 func createStateHandler(sensorAPI *sensor.FireSensor) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -277,11 +240,11 @@ func createStateHandler(sensorAPI *sensor.FireSensor) http.HandlerFunc {
 	}
 }
 
-// createStatsHandler cria handler para GET /stats
+// createStatsHandler handles GET /stats
 func createStatsHandler(sensorAPI *sensor.FireSensor, neighborTable *network.NeighborTable, controlSystem *protocol.ControlSystem, dissemination *gossip.DisseminationSystem) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 

@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// HTTPTCPSender implementa TCPSender usando HTTP client
+// HTTPTCPSender implements TCPSender using an HTTP client
 type HTTPTCPSender struct {
 	client  *http.Client
 	timeout time.Duration
 }
 
-// NewHTTPTCPSender cria um novo sender TCP via HTTP
+// NewHTTPTCPSender creates a new TCP sender via HTTP
 func NewHTTPTCPSender(timeout time.Duration) *HTTPTCPSender {
 	return &HTTPTCPSender{
 		client: &http.Client{
@@ -24,36 +24,36 @@ func NewHTTPTCPSender(timeout time.Duration) *HTTPTCPSender {
 	}
 }
 
-// SendDelta envia delta para URL via POST /delta
+// SendDelta sends a delta to the given URL via POST /delta
 func (hts *HTTPTCPSender) SendDelta(url string, delta DeltaMsg) error {
-	// Prepara payload JSON
+	// Prepare JSON payload
 	payload, err := json.Marshal(delta)
 	if err != nil {
-		return fmt.Errorf("erro ao serializar delta: %v", err)
+		return fmt.Errorf("failed to serialize delta: %v", err)
 	}
 
-	// Monta URL completa
+	// Build full URL
 	fullURL := fmt.Sprintf("%s/delta", url)
 
-	// Cria request
+	// Create request
 	req, err := http.NewRequest("POST", fullURL, bytes.NewBuffer(payload))
 	if err != nil {
-		return fmt.Errorf("erro ao criar request: %v", err)
+		return fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "drone-gossip/1.0")
 
-	// Envia request
+	// Send request
 	resp, err := hts.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("erro ao enviar request: %v", err)
+		return fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Verifica status
+	// Check status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("status HTTP %d ao enviar delta", resp.StatusCode)
+		return fmt.Errorf("HTTP status %d when sending delta", resp.StatusCode)
 	}
 
 	return nil

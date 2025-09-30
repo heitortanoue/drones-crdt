@@ -10,25 +10,25 @@ import (
 	"github.com/heitortanoue/tcc/pkg/sensor"
 )
 
-// ControlSystem gerencia o envio de mensagens HELLO
+// ControlSystem manages the sending of HELLO messages
 type ControlSystem struct {
 	droneID   string
 	sensorAPI *sensor.FireSensor
 	udpSender UDPSender
 
-	// Controle de execução
+	// Execution control
 	running bool
 	stopCh  chan struct{}
 	mutex   sync.RWMutex
 }
 
-// UDPSender interface para envio de mensagens UDP
+// UDPSender interface for sending UDP messages
 type UDPSender interface {
 	Broadcast(data []byte)
 	SendTo(data []byte, targetIP string, targetPort int) error
 }
 
-// NewControlSystem cria um novo sistema de controle
+// NewControlSystem creates a new control system
 func NewControlSystem(droneID string, sensorAPI *sensor.FireSensor, udpSender UDPSender) *ControlSystem {
 	return &ControlSystem{
 		droneID:   droneID,
@@ -39,7 +39,7 @@ func NewControlSystem(droneID string, sensorAPI *sensor.FireSensor, udpSender UD
 	}
 }
 
-// Start inicia o sistema de controle
+// Start launches the control system
 func (cs *ControlSystem) Start() {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
@@ -49,13 +49,13 @@ func (cs *ControlSystem) Start() {
 	}
 
 	cs.running = true
-	log.Printf("[CONTROL] Iniciando sistema de controle para %s", cs.droneID)
+	log.Printf("[CONTROL] Starting control system for %s", cs.droneID)
 
-	// Inicia loop de mensagens HELLO
+	// Start HELLO message loop
 	go cs.helloLoop()
 }
 
-// Stop para o sistema de controle
+// Stop shuts down the control system
 func (cs *ControlSystem) Stop() {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
@@ -66,13 +66,13 @@ func (cs *ControlSystem) Stop() {
 
 	cs.running = false
 	close(cs.stopCh)
-	log.Printf("[CONTROL] Parando sistema de controle para %s", cs.droneID)
+	log.Printf("[CONTROL] Stopping control system for %s", cs.droneID)
 }
 
-// helloLoop envia mensagens HELLO periodicamente
+// helloLoop periodically sends HELLO messages
 func (cs *ControlSystem) helloLoop() {
 	for {
-		// Intervalo aleatório entre 3-6 segundos
+		// Random interval between 3–6 seconds
 		randomInterval := time.Duration(3000+rand.Intn(3000)) * time.Millisecond
 
 		select {
@@ -84,33 +84,33 @@ func (cs *ControlSystem) helloLoop() {
 	}
 }
 
-// sendHello envia mensagem HELLO
+// sendHello sends a HELLO message
 func (cs *ControlSystem) sendHello() {
-	// Cria mensagem HELLO
+	// Create HELLO message
 	msg := HelloMessage{
-		ID:        cs.droneID,
+		ID: cs.droneID,
 	}
 
-	// Serializa para JSON
+	// Serialize to JSON
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[CONTROL] Erro ao serializar HELLO: %v", err)
+		log.Printf("[CONTROL] Error serializing HELLO: %v", err)
 		return
 	}
 
 	// Broadcast via UDP
 	cs.udpSender.Broadcast(data)
 
-	log.Printf("[CONTROL] %s enviou HELLO", cs.droneID)
+	log.Printf("[CONTROL] %s sent HELLO", cs.droneID)
 }
 
-// ProcessMessage processa mensagem de controle recebida (placeholder para futuro)
+// ProcessMessage processes a received control message (placeholder for future use)
 func (cs *ControlSystem) ProcessMessage(data []byte, senderIP string) {
-	// Por enquanto apenas registra que recebeu uma mensagem
-	log.Printf("[CONTROL] %s recebeu mensagem de %s", cs.droneID, senderIP)
+	// For now, just log that a message was received
+	log.Printf("[CONTROL] %s received message from %s", cs.droneID, senderIP)
 }
 
-// GetStats retorna estatísticas do sistema de controle
+// GetStats returns statistics from the control system
 func (cs *ControlSystem) GetStats() map[string]interface{} {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()

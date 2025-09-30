@@ -7,49 +7,49 @@ import (
 )
 
 var (
-	// Instância global do estado do drone
+	// Global instance of the drone state
 	globalState *DroneState
 	once        sync.Once
 )
 
-// InitGlobalState inicializa o estado global do drone
-// Deve ser chamado uma vez durante a inicialização da aplicação
+// InitGlobalState initializes the global state of the drone.
+// Must be called once during application startup.
 func InitGlobalState(droneID string) {
 	once.Do(func() {
 		globalState = NewDroneState(droneID)
 	})
 }
 
-// GetGlobalState retorna a instância global do estado
-// Retorna nil se não foi inicializado
+// GetState returns the global state instance.
+// Returns nil if it has not been initialized.
 func GetState() *DroneState {
 	return globalState
 }
 
-// MergeDelta aplica delta ao estado global
+// MergeDelta applies a delta to the global state
 func MergeDelta(delta crdt.FireDelta) {
 	if globalState != nil {
 		globalState.MergeDelta(delta)
 	}
 }
 
-// Funções de conveniência para acesso ao estado global
+// Convenience functions for accessing the global state
 
-// AddFire adiciona fogo ao estado global
+// AddFire adds a fire detection to the global state
 func AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	if globalState != nil {
 		globalState.AddFire(cell, meta)
 	}
 }
 
-// RemoveFire remove fogo do estado global
+// RemoveFire removes a fire detection from the global state
 func RemoveFire(cell crdt.Cell) {
 	if globalState != nil {
 		globalState.RemoveFire(cell)
 	}
 }
 
-// GetGlobalActiveFires retorna focos ativos do estado global
+// GetActiveFires returns the currently active fire cells from the global state
 func GetActiveFires() []crdt.Cell {
 	if globalState != nil {
 		return globalState.GetActiveFires()
@@ -57,6 +57,7 @@ func GetActiveFires() []crdt.Cell {
 	return nil
 }
 
+// GetLatestReadings returns the latest fire readings from the global state
 func GetLatestReadings() map[string]crdt.FireMeta {
 	if globalState != nil {
 		return globalState.GetLatestReadings()
@@ -64,7 +65,7 @@ func GetLatestReadings() map[string]crdt.FireMeta {
 	return nil
 }
 
-// GenerateGlobalDelta gera delta do estado global
+// GenerateDelta generates a delta of the global state
 func GenerateDelta() *crdt.FireDelta {
 	if globalState != nil {
 		return globalState.GenerateDelta()
@@ -72,19 +73,19 @@ func GenerateDelta() *crdt.FireDelta {
 	return nil
 }
 
-// ClearGlobalDelta limpa delta do estado global
+// ClearDelta clears the delta of the global state
 func ClearDelta() {
 	if globalState != nil {
 		globalState.ClearDelta()
 	}
 }
 
-// GetGlobalStats retorna estatísticas do estado global
+// GetStats returns statistics of the global state
 func GetStats() map[string]interface{} {
 	if globalState != nil {
 		return globalState.GetStats()
 	}
 	return map[string]interface{}{
-		"error": "estado global não inicializado",
+		"error": "global state not initialized",
 	}
 }
