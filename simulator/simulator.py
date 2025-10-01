@@ -11,6 +11,7 @@ from mn_wifi.net import Mininet_wifi
 from mn_wifi.cli import CLI
 from mn_wifi.wmediumdConnector import interference
 from datetime import datetime
+from typing import List, Set
 
 # --- Configuration Constants ---
 DRONE_NUMBER = 4
@@ -57,9 +58,10 @@ def setup_topology():
             name,
             mac=mac,
             ip=ip,
-            min_x=25 * (i-1), max_x=20 * i + 20,
-            min_y=25 * (i-1), max_y=20 * i + 20,
-            min_v=0.5*SPEED, max_v=SPEED, **kwargs
+            txpower=20,
+            min_x=0, max_x=100,
+            min_y=0, max_y=100,
+            min_v=0.6*SPEED, max_v=SPEED, **kwargs
         )
         drones.append(drone)
     info("*** Configuring the signal propagation model ***\n")
@@ -86,11 +88,15 @@ def setup_topology():
 
 def fetch_states(drones, stop_event, csv_writers):
     """Fetches and logs the state of the drones periodically."""
+    repetitions = 0
+    convergence = 0.0
     while not stop_event.is_set():
         stop_event.wait(duration)
         if stop_event.is_set():
             break
-        for drone in drones:
+
+        drone_delta_sets: List[Set[str]] = [set() for _ in drones]
+        for i, drone in enumerate(drones):
             command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state'
             response_str = drone.cmd(command).strip()
             position = drone.position
@@ -106,6 +112,9 @@ def fetch_states(drones, stop_event, csv_writers):
                 confidence = reading_data['confidence']
                 all_deltas = data['all_deltas']
 
+                for delta in all_deltas:
+                    drone_delta_sets[i].add(json.dumps(delta))
+
                 # Format the timestamp from milliseconds to a readable string
                 formatted_timestamp = datetime.fromtimestamp(timestamp_ms / 1000).isoformat()
                 
@@ -113,7 +122,7 @@ def fetch_states(drones, stop_event, csv_writers):
                 deltas_str = json.dumps(all_deltas)
 
                 # Write the parsed data to the CSV file
-                writer.writerow([formatted_timestamp, deltas_str, confidence, position])
+                writer.writerow([formatted_timestamp, deltas_str, confidence, position, repetitions, convergence])
                 
             except (json.JSONDecodeError, KeyError, IndexError) as e:
                 # Handle cases where the response is not valid JSON or missing keys
@@ -122,6 +131,36 @@ def fetch_states(drones, stop_event, csv_writers):
                 writer.writerow([error_timestamp, error_msg, 'N/A', position])
                 info(f"-> ERROR for {drone.name}: Could not parse JSON response. See CSV for details.\n")
                 info(f"   Problematic response: {response_str}\n")
+        
+        # Check for convergence
+        repetitions += 1
+        convergence = convergence_index(drone_delta_sets)
+        if convergence == 1.0:
+            info("-> All drones have converged! <-\n")
+            info(f"-> Convergence achieved after {repetitions * duration} seconds <-\n")
+
+def jaccard_index(set1: Set, set2: Set) -> float:
+    """Calcula o índice de Jaccard entre dois conjuntos."""
+    if not set1 and not set2:
+        return 1.0  # ambos vazios → totalmente convergentes
+    inter = len(set1 & set2)
+    uni = len(set1 | set2)
+    return inter / uni
+
+def convergence_index(replicas: List[Set]) -> float:
+    """
+    Calcula um índice médio de convergência entre múltiplas réplicas de CRDT (baseado em Jaccard).
+    Retorna valor entre 0 e 1.
+    """
+    if len(replicas) < 2:
+        return 1.0  # só uma réplica → convergência total
+
+    scores = []
+    n = len(replicas)
+    for i in range(n):
+        for j in range(i + 1, n):
+            scores.append(jaccard_index(replicas[i], replicas[j]))
+    return sum(scores) / len(scores)
 
 def main():
     """Main execution function."""
@@ -160,7 +199,7 @@ def main():
             file_handle = open(filename, 'w', newline='')
             writer = csv.writer(file_handle)
             # Write the header row
-            writer.writerow(['timestamp', 'all_deltas', 'confidence', 'position'])
+            writer.writerow(['timestamp', 'all_deltas', 'confidence', 'position', 'repetition', 'convergence'])
             
             csv_files[drone.name] = file_handle
             csv_writers[drone.name] = writer
