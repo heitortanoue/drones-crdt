@@ -15,6 +15,8 @@ from typing import List, Set
 
 # --- Configuration Constants ---
 DRONE_NUMBER = 4
+DRONE_RANGE = 30  # Communication range of each drone in meters
+
 EXEC_PATH = '../drone/bin/drone-linux'  # Path to the compiled Go drone application
 OUTPUT_DIR = 'drone_execution_data/'   # Directory for telemetry logs
 TCP_PORT = 8080
@@ -23,19 +25,6 @@ SPEED = 2
 DRONE_NAMES = [f'dr{i}' for i in range(1, DRONE_NUMBER + 1)]
 DRONE_IPs = []
 duration = 10  # Duration to run the simulation before fetching data
-
-def update_telemetry_data_dir(names):
-    """Moves generated telemetry files to the output directory"""
-    info(f"*** Moving telemetry files to {OUTPUT_DIR}... ***\n")
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    for name in names:
-        source_file = f"position-{name}-mn-telemetry.txt"
-        destination_file = os.path.join(OUTPUT_DIR, source_file)
-
-        if os.path.exists(source_file):
-            shutil.move(source_file, destination_file)
-            info(f"-> File {source_file} moved <-\n")
 
 def setup_topology():
     """Creates and configures the network topology for the drone simulation."""
@@ -49,7 +38,7 @@ def setup_topology():
     info("*** Creating drone nodes ***\n")
     drones = []
     kwargs = {}
-    kwargs['range'] = 10
+    kwargs['range'] = DRONE_RANGE
     for i, name in enumerate(DRONE_NAMES, 1):
         mac = f'00:00:00:00:00:0{i}'
         ip = f'10.0.0.{i}/8'
