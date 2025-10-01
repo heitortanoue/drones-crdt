@@ -129,20 +129,20 @@ def fetch_states(drones, stop_event, csv_writers):
             info(f"-> Convergence achieved after {repetitions * duration} seconds <-\n")
 
 def jaccard_index(set1: Set, set2: Set) -> float:
-    """Calcula o índice de Jaccard entre dois conjuntos."""
+    """Calculates the Jaccard index between two sets."""
     if not set1 and not set2:
-        return 1.0  # ambos vazios → totalmente convergentes
+        return 1.0  # both empty → fully converged
     inter = len(set1 & set2)
     uni = len(set1 | set2)
     return inter / uni
 
 def convergence_index(replicas: List[Set]) -> float:
     """
-    Calcula um índice médio de convergência entre múltiplas réplicas de CRDT (baseado em Jaccard).
-    Retorna valor entre 0 e 1.
+    Calculates the average convergence index between multiple CRDT replicas (based on Jaccard).
+    Returns a value between 0 and 1.
     """
     if len(replicas) < 2:
-        return 1.0  # só uma réplica → convergência total
+        return 1.0  # only one replica → total convergence
 
     scores = []
     n = len(replicas)
@@ -165,9 +165,6 @@ def main():
     info("*** Building the network ***\n")
     net.build()
     net.start()
-
-    # info("*** Starting real-time visualization plot... ***\n")
-    # telemetry(nodes=net.stations, single=True, data_type='position')
 
     info("--- Starting Go applications on drones... ---\n")
     for i, drone in enumerate(net.stations, 1):
@@ -195,7 +192,6 @@ def main():
             info(f"Opened {filename} for data logging.\n")
 
         stop_event = threading.Event()
-        ## Pass the dictionary of csv_writers to the thread.
         fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
         fetch_thread.start()
 
