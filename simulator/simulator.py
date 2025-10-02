@@ -30,57 +30,57 @@ class DroneControlPanel:
     def __init__(self, root, drone_list):
         """Construtor da nossa classe de interface gráfica."""
         self.root = root
-        self.root.title("Painel de Controle de Drones")
-        self.root.geometry("500x250") # Define o tamanho inicial da janela
+        self.root.title("Drone Control Panel")
+        self.root.geometry("500x250") # Initial size of the window
         self.drone_list = drone_list
 
-        # Define um estilo para os widgets
+        # Widget style
         self.style = ttk.Style()
         self.style.theme_use('clam') # 'clam', 'alt', 'default', 'classic'
 
-        # --- Criação dos Widgets (Componentes da tela) ---
+        # --- Widgets Creation ---
 
-        # Frame principal para organizar o conteúdo
+        # Main frame to organize content
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(expand=True, fill='both')
 
-        # 1. Label e Menu de Seleção de Drone
-        ttk.Label(main_frame, text="Selecione o Drone:", font=("Helvetica", 12)).grid(row=0, column=0, padx=5, pady=10, sticky='w')
+        # 1. Label and Drone Selection Menu
+        ttk.Label(main_frame, text="Select Drone:", font=("Helvetica", 12)).grid(row=0, column=0, padx=5, pady=10, sticky='w')
 
         self.drone_selector = ttk.Combobox(
-            main_frame, 
-            values=DRONE_NAMES, 
-            state='readonly', # Impede que o usuário digite no campo
+            main_frame,
+            values=DRONE_NAMES,
+            state='readonly',
             font=("Helvetica", 11)
         )
         self.drone_selector.grid(row=0, column=1, padx=5, pady=10, sticky='ew')
 
-        # 2. Frame para os Botões
+        # 2. Button Frame
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=1, column=0, columnspan=2, pady=15)
 
-        # Botão para ver a deltas
-        self.position_button = ttk.Button(button_frame, text="Ver deltas do drone", command=self.show_deltas)
+        # Deltas button
+        self.position_button = ttk.Button(button_frame, text="View Drone Deltas", command=self.show_deltas)
         self.position_button.pack(side='left', padx=10)
 
-        # Botão para ver a localização
-        self.location_button = ttk.Button(button_frame, text="Ver Localização", command=self.show_location_info)
+        # Location button
+        self.location_button = ttk.Button(button_frame, text="View Location", command=self.show_location_info)
         self.location_button.pack(side='left', padx=10)
 
-        # Botão para ver o status
-        self.status_button = ttk.Button(button_frame, text="Ver Status", command=self.show_status_info)
-        self.status_button.pack(side='left', padx=10)
+        # Neighbours button
+        self.neighbours_button = ttk.Button(button_frame, text="View Neighbours", command=self.show_neighbours_info)
+        self.neighbours_button.pack(side='left', padx=10)
 
-        # 3. Label para exibir as informações
-        self.info_label = ttk.Label(main_frame, text="Selecione um drone e clique em um botão.", font=("Helvetica", 12), foreground="gray")
+        # 3. Label to display information
+        self.info_label = ttk.Label(main_frame, text="Select a drone and click a button.", font=("Helvetica", 12), foreground="gray")
         self.info_label.grid(row=2, column=0, columnspan=2, pady=20)
-        
-        # Configura o grid para expandir corretamente com a janela
+
+        # Configures the grid to expand correctly with the window
         main_frame.columnconfigure(1, weight=1)
 
-    # --- Funções que os botões irão chamar ---
+    # --- Functions called by the buttons ---
     def get_selected_drone(self):
-        """Retorna o nome do drone selecionado no menu."""
+        """Returns the name of the selected drone in the menu."""
         for drone in self.drone_list:
             if drone.name == DRONE_NAMES[self.drone_selector.current()]:
                 return drone
@@ -94,39 +94,42 @@ class DroneControlPanel:
         self.info_label.config(text=f"Position of {drone.name}\n X: {drone.position[0]}, Y: {drone.position[1]}", foreground="blue")
 
     def show_deltas(self):
-        """Exibe informação mockada sobre a localização."""
-        drone_id = self.get_selected_drone()
-        if not drone_id:
-            self.info_label.config(text="Erro: Nenhum drone selecionado.", foreground="red")
+        """Shows information about the deltas."""
+        drone = self.get_selected_drone()
+        if not drone:
+            self.info_label.config(text="Error: No drone selected.", foreground="red")
             return
+        timestamp_ms, confidence, all_deltas = fetch_state(drone)
+        self.info_label.config(text=f"Deltas of {drone.name}\nTimestamp: {datetime.fromtimestamp(timestamp_ms / 1000).isoformat()}\nConfidence: {confidence}\nDeltas: {all_deltas}", foreground="blue")
 
-        # Valor mockado
-        lat = f"-21"
-        lon = f"-48"
-        self.info_label.config(text=f"Localização do {drone_id}: Lat {lat}, Lon {lon}", foreground="blue")
-
-    def show_status_info(self):
-        """Exibe informação mockada sobre o status."""
-        drone_id = self.get_selected_drone()
-        if not drone_id:
-            self.info_label.config(text="Erro: Nenhum drone selecionado.", foreground="red")
+    def show_neighbours_info(self):
+        """Shows information about the neighbours."""
+        drone = self.get_selected_drone()
+        if not drone:
+            self.info_label.config(text="Error: No drone selected.", foreground="red")
             return
-            
-        # Valor mockado
-        statuses = ["Em voo", "Pousado", "Retornando à base", "Em manutenção"]
-        self.info_label.config(text=f"Status do {drone_id}: {statuses[0]}", foreground="blue")
+        neighbours = fetch_neighbours(drone)
+        self.info_label.config(text=f"Neighbours of {drone.name}: {neighbours}", foreground="blue")
+
+def setup_UI(drones):
+    """Creates and configures the UI for the drone simulation."""
+    info("--- Creating the drone UI ---\n")
+    root = tk.Tk()
+    app = DroneControlPanel(root, drone_list=drones)
+    root.mainloop()
 
 def setup_topology():
     """Creates and configures the network topology for the drone simulation."""
     info("--- Creating a Go drone network with Mininet-WiFi ---\n")
+    drones = []
     net = Mininet_wifi(
         controller=Controller,
         link=wmediumd,
         wmediumd_mode=interference
     )
     net.addController('c0')
+
     info("*** Creating drone nodes ***\n")
-    drones = []
     kwargs = {}
     kwargs['range'] = DRONE_RANGE
     for i, name in enumerate(DRONE_NAMES, 1):
@@ -143,6 +146,7 @@ def setup_topology():
             min_v=0.6*SPEED, max_v=SPEED, **kwargs
         )
         drones.append(drone)
+
     info("*** Configuring the signal propagation model ***\n")
     net.setPropagationModel(model="logDistance", exp=4)
     info("*** Configuring network nodes ***\n")
@@ -150,6 +154,7 @@ def setup_topology():
     net.plotGraph()
     net.setMobilityModel(time=0, model='RandomDirection',
                          max_x=100, max_y=100, seed=20)
+    
     info("*** Adding ad-hoc links to drones ***\n")
     kwargs['proto'] = 'batman_adv'
     for drone in drones:
@@ -165,6 +170,38 @@ def setup_topology():
 
     return net, drones
 
+def fetch_neighbours(drone):
+    command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/neighbours'
+    response_str = drone.cmd(command).strip()
+
+    ## Parse the JSON response and log the specific fields.
+    try:
+        data = json.loads(response_str)
+        return data
+
+    except (json.JSONDecodeError) as e:
+        # Handle cases where the response is not valid JSON or missing endpoint
+        return "endpoint not implemented"
+
+def fetch_state(drone):
+    command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state'
+    response_str = drone.cmd(command).strip()
+
+    ## Parse the JSON response and log the specific fields.
+    try:
+        data = json.loads(response_str)
+        # Extract data, assuming the first entry in latest_readings is the relevant one
+        reading_data = list(data['latest_readings'].values())[0]
+        timestamp_ms = reading_data['timestamp']
+        confidence = reading_data['confidence']
+        all_deltas = data['all_deltas']
+        return timestamp_ms, confidence, all_deltas
+
+    except (json.JSONDecodeError) as e:
+        # Handle cases where the response is not valid JSON
+        info(f"-> ERROR for {drone.name}: Could not parse JSON response <-\n")
+        info(f"   Problematic response: {response_str}\n")
+
 def fetch_states(drones, stop_event, csv_writers):
     """Fetches and logs the state of the drones periodically."""
     repetitions = 0
@@ -176,40 +213,20 @@ def fetch_states(drones, stop_event, csv_writers):
 
         drone_delta_sets: List[Set[str]] = [set() for _ in drones]
         for i, drone in enumerate(drones):
-            command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state'
-            response_str = drone.cmd(command).strip()
             position = drone.position
             writer = csv_writers[drone.name]
+            timestamp_ms, confidence, all_deltas = fetch_state(drone)
+            for delta in all_deltas:
+                drone_delta_sets[i].add(json.dumps(delta))
 
-            ## Parse the JSON response and log the specific fields.
-            try:
-                data = json.loads(response_str)
-                
-                # Extract data, assuming the first entry in latest_readings is the relevant one
-                reading_data = list(data['latest_readings'].values())[0]
-                timestamp_ms = reading_data['timestamp']
-                confidence = reading_data['confidence']
-                all_deltas = data['all_deltas']
+            # Format the timestamp from milliseconds to a readable string
+            formatted_timestamp = datetime.fromtimestamp(timestamp_ms / 1000).isoformat()
+            
+            # Convert all_deltas list to a compact JSON string for storage in a single CSV cell
+            deltas_str = json.dumps(all_deltas)
 
-                for delta in all_deltas:
-                    drone_delta_sets[i].add(json.dumps(delta))
-
-                # Format the timestamp from milliseconds to a readable string
-                formatted_timestamp = datetime.fromtimestamp(timestamp_ms / 1000).isoformat()
-                
-                # Convert all_deltas list to a compact JSON string for storage in a single CSV cell
-                deltas_str = json.dumps(all_deltas)
-
-                # Write the parsed data to the CSV file
-                writer.writerow([formatted_timestamp, deltas_str, confidence, position, repetitions, convergence])
-                
-            except (json.JSONDecodeError, KeyError, IndexError) as e:
-                # Handle cases where the response is not valid JSON or missing keys
-                error_timestamp = datetime.now().isoformat()
-                error_msg = f"ERROR parsing response: {type(e).__name__}"
-                writer.writerow([error_timestamp, error_msg, 'N/A', position])
-                info(f"-> ERROR for {drone.name}: Could not parse JSON response. See CSV for details.\n")
-                info(f"   Problematic response: {response_str}\n")
+            # Write the parsed data to the CSV file
+            writer.writerow([formatted_timestamp, deltas_str, confidence, position, repetitions, convergence])
         
         # Check for convergence
         repetitions += 1
@@ -284,10 +301,8 @@ def main():
         stop_event = threading.Event()
         fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
         fetch_thread.start()
-
-        root = tk.Tk()
-        app = DroneControlPanel(root, drone_list=drones)
-        root.mainloop()
+        running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
+        running_ui_thread.start()
 
         info("\n*** Simulation is running. CSV data is being saved in 'drone_execution_data'. ***\n")
         info("*** Type 'exit' or Ctrl+D in the CLI to quit. ***\n")
@@ -299,7 +314,9 @@ def main():
             stop_event.set()
         if 'fetch_thread' in locals():
             fetch_thread.join(timeout=5)
-        
+        if 'running_ui_thread' in locals():
+            running_ui_thread.join(timeout=5)
+
         # Close all open CSV files
         for file_handle in csv_files.values():
             file_handle.close()
