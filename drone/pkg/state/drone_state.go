@@ -194,3 +194,36 @@ func (ds *DroneState) GetStats() map[string]interface{} {
 func (ds *DroneState) GetDroneID() string {
 	return ds.droneID
 }
+
+// GetFullState returns the complete state as a FireDelta (for anti-entropy)
+func (ds *DroneState) GetFullState() *crdt.FireDelta {
+	ds.mutex.RLock()
+	defer ds.mutex.RUnlock()
+
+	if len(ds.fires.Core.Entries) == 0 {
+		return nil
+	}
+
+	delta := &crdt.FireDelta{
+		Context: *ds.fires.Core.Context,
+		Entries: make([]crdt.FireDeltaEntry, 0, len(ds.fires.Core.Entries)),
+	}
+
+	for dot, cell := range ds.fires.Core.Entries {
+		meta, exists := ds.metadata[dot]
+		if !exists {
+			meta = crdt.FireMeta{
+				Timestamp:  0,
+				Confidence: 1.0,
+			}
+		}
+
+		delta.Entries = append(delta.Entries, crdt.FireDeltaEntry{
+			Dot:  dot,
+			Cell: cell,
+			Meta: meta,
+		})
+	}
+
+	return delta
+}

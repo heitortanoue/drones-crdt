@@ -89,3 +89,11 @@ func GetStats() map[string]interface{} {
 		"error": "global state not initialized",
 	}
 }
+
+// GetFullState returns the complete state (for anti-entropy)
+func GetFullState() *crdt.FireDelta {
+	if globalState != nil {
+		return globalState.GetFullState()
+	}
+	return nil
+}

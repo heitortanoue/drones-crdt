@@ -2,7 +2,6 @@ package network
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -52,9 +51,6 @@ func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, por
 		ID:       hello.ID,
 		LastSeen: time.Now(),
 	}
-
-	log.Println("Neighbor added/updated")
-	log.Println(nt.String())
 }
 
 // GetActiveNeighbors returns only active (non-expired) neighbors
