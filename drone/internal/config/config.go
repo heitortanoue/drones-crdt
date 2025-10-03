@@ -21,6 +21,10 @@ type DroneConfig struct {
 	Fanout int `json:"fanout"` // número de vizinhos para gossip
 	TTL    int `json:"ttl"`    // TTL inicial para mensagens
 
+	// Dissemination intervals
+	DeltaPushInterval   time.Duration `json:"delta_push_interval"`   // intervalo entre envios de delta (5s)
+	AntiEntropyInterval time.Duration `json:"anti_entropy_interval"` // intervalo de anti-entropy (60s)
+
 	// Timeouts e intervalos
 	NeighborTimeout    time.Duration `json:"neighbor_timeout"`    // timeout para expirar vizinhos (9s)
 	TransmitterTimeout time.Duration `json:"transmitter_timeout"` // timeout para transmissor (5s)
@@ -29,14 +33,16 @@ type DroneConfig struct {
 // DefaultConfig retorna configuração padrão
 func DefaultConfig() *DroneConfig {
 	return &DroneConfig{
-		DroneID:            "drone-1",
-		UDPPort:            7000,
-		TCPPort:            8080,
-		BindAddr:           "0.0.0.0",
-		SampleInterval:     10 * time.Second,
-		Fanout:             3,
-		TTL:                4,
-		NeighborTimeout:    9 * time.Second,
-		TransmitterTimeout: 5 * time.Second,
+		DroneID:             "drone-1",
+		UDPPort:             7000,
+		TCPPort:             8080,
+		BindAddr:            "0.0.0.0",
+		SampleInterval:      10 * time.Second,
+		Fanout:              3,
+		TTL:                 4,
+		DeltaPushInterval:   5 * time.Second,  // Delta push a cada 5s
+		AntiEntropyInterval: 60 * time.Second, // Anti-entropy a cada 60s
+		NeighborTimeout:     9 * time.Second,
+		TransmitterTimeout:  5 * time.Second,
 	}
 }

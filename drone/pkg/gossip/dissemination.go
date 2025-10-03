@@ -26,6 +26,10 @@ type DisseminationSystem struct {
 	fanout     int // Fan-out (number of neighbors)
 	defaultTTL int // Default initial TTL
 
+	// Configurable intervals
+	deltaPushInterval   time.Duration
+	antiEntropyInterval time.Duration
+
 	// Communication interfaces
 	neighborGetter NeighborGetter
 	tcpSender      TCPSender
@@ -114,17 +118,19 @@ func (nt *NeighborTracker) PrioritizeNeighbors(neighbors []string, count int) []
 }
 
 // NewDisseminationSystem creates a new dissemination system
-func NewDisseminationSystem(droneID string, fanout, defaultTTL int, neighborGetter NeighborGetter, tcpSender TCPSender) *DisseminationSystem {
+func NewDisseminationSystem(droneID string, fanout, defaultTTL int, deltaPushInterval, antiEntropyInterval time.Duration, neighborGetter NeighborGetter, tcpSender TCPSender) *DisseminationSystem {
 	return &DisseminationSystem{
-		droneID:         droneID,
-		fanout:          fanout,
-		defaultTTL:      defaultTTL,
-		neighborGetter:  neighborGetter,
-		tcpSender:       tcpSender,
-		cache:           NewDeduplicationCache(10000), // Cache of 10k IDs
-		neighborTracker: NewNeighborTracker(),
-		running:         false,
-		stopCh:          make(chan struct{}),
+		droneID:             droneID,
+		fanout:              fanout,
+		defaultTTL:          defaultTTL,
+		deltaPushInterval:   deltaPushInterval,
+		antiEntropyInterval: antiEntropyInterval,
+		neighborGetter:      neighborGetter,
+		tcpSender:           tcpSender,
+		cache:               NewDeduplicationCache(10000), // Cache of 10k IDs
+		neighborTracker:     NewNeighborTracker(),
+		running:             false,
+		stopCh:              make(chan struct{}),
 	}
 }
 
@@ -289,7 +295,7 @@ func selectRandomNeighbors(neighbors []string, count int) []string {
 
 // startHeartbeat periodically triggers sending of local delta
 func (ds *DisseminationSystem) startHeartbeat() {
-	ticker := time.NewTicker(5 * time.Second) // heartbeat interval
+	ticker := time.NewTicker(ds.deltaPushInterval)
 	defer ticker.Stop()
 
 	for {
@@ -317,7 +323,7 @@ func (ds *DisseminationSystem) startHeartbeat() {
 
 // startAntiEntropyLoop periodically sends full state to a random neighbor
 func (ds *DisseminationSystem) startAntiEntropyLoop() {
-	ticker := time.NewTicker(60 * time.Second) // Anti-entropy every 60 seconds
+	ticker := time.NewTicker(ds.antiEntropyInterval)
 	defer ticker.Stop()
 
 	for {
@@ -372,15 +378,17 @@ func (ds *DisseminationSystem) GetStats() map[string]interface{} {
 	defer ds.mutex.RUnlock()
 
 	return map[string]interface{}{
-		"running":            ds.running,
-		"fanout":             ds.fanout,
-		"default_ttl":        ds.defaultTTL,
-		"sent_count":         ds.sentCount,
-		"received_count":     ds.receivedCount,
-		"dropped_count":      ds.droppedCount,
-		"anti_entropy_count": ds.antiEntropyCount,
-		"cache_size":         ds.cache.Size(),
-		"neighbor_count":     ds.neighborGetter.Count(),
+		"running":                   ds.running,
+		"fanout":                    ds.fanout,
+		"default_ttl":               ds.defaultTTL,
+		"delta_push_interval_sec":   ds.deltaPushInterval.Seconds(),
+		"anti_entropy_interval_sec": ds.antiEntropyInterval.Seconds(),
+		"sent_count":                ds.sentCount,
+		"received_count":            ds.receivedCount,
+		"dropped_count":             ds.droppedCount,
+		"anti_entropy_count":        ds.antiEntropyCount,
+		"cache_size":                ds.cache.Size(),
+		"neighbor_count":            ds.neighborGetter.Count(),
 	}
 }
 

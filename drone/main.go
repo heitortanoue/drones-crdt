@@ -25,14 +25,16 @@ var startTime = time.Now() // For uptime calculation
 func main() {
 	// Command line flags
 	var (
-		droneID   = flag.String("id", "drone-1", "Unique ID of this drone")
-		sampleSec = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
-		fanout    = flag.Int("fanout", 3, "Number of neighbors for gossip")
-		ttl       = flag.Int("ttl", 4, "Initial TTL for gossip messages")
-		udpPort   = flag.Int("udp-port", 7000, "UDP port for control")
-		tcpPort   = flag.Int("tcp-port", 8080, "TCP port for data")
-		bindAddr  = flag.String("bind", "0.0.0.0", "Bind address")
-		showUsage = flag.Bool("help", false, "Show usage help")
+		droneID        = flag.String("id", "drone-1", "Unique ID of this drone")
+		sampleSec      = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
+		fanout         = flag.Int("fanout", 3, "Number of neighbors for gossip")
+		ttl            = flag.Int("ttl", 4, "Initial TTL for gossip messages")
+		deltaPushSec   = flag.Int("delta-push-sec", 5, "Delta push interval in seconds")
+		antiEntropySec = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds")
+		udpPort        = flag.Int("udp-port", 7000, "UDP port for control")
+		tcpPort        = flag.Int("tcp-port", 8080, "TCP port for data")
+		bindAddr       = flag.String("bind", "0.0.0.0", "Bind address")
+		showUsage      = flag.Bool("help", false, "Show usage help")
 	)
 	flag.Parse()
 
@@ -47,6 +49,8 @@ func main() {
 	cfg.SampleInterval = time.Duration(*sampleSec) * time.Second
 	cfg.Fanout = *fanout
 	cfg.TTL = *ttl
+	cfg.DeltaPushInterval = time.Duration(*deltaPushSec) * time.Second
+	cfg.AntiEntropyInterval = time.Duration(*antiEntropySec) * time.Second
 	cfg.UDPPort = *udpPort
 	cfg.TCPPort = *tcpPort
 	cfg.BindAddr = *bindAddr
@@ -69,7 +73,15 @@ func main() {
 
 	// Dissemination system with TTL gossip
 	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
-	disseminationSystem := gossip.NewDisseminationSystem(cfg.DroneID, cfg.Fanout, cfg.TTL, neighborTable, tcpSender)
+	disseminationSystem := gossip.NewDisseminationSystem(
+		cfg.DroneID,
+		cfg.Fanout,
+		cfg.TTL,
+		cfg.DeltaPushInterval,
+		cfg.AntiEntropyInterval,
+		neighborTable,
+		tcpSender,
+	)
 
 	// Handlers integration
 	tcpServer.SensorHandler = createSensorHandler(sensorAPI, disseminationSystem)
@@ -113,6 +125,7 @@ func main() {
 	fmt.Printf("TCP (data): http://%s:%d\n", cfg.BindAddr, cfg.TCPPort)
 	fmt.Printf("Sampling: every %v\n", cfg.SampleInterval)
 	fmt.Printf("Gossip: fanout=%d, ttl=%d\n", cfg.Fanout, cfg.TTL)
+	fmt.Printf("Dissemination: delta-push=%v, anti-entropy=%v\n", cfg.DeltaPushInterval, cfg.AntiEntropyInterval)
 	fmt.Printf("Starting...\n\n")
 
 	// Start components
@@ -141,9 +154,10 @@ EXAMPLES:
   %s -id=drone-1 -sample-sec=10
   %s -id=drone-2 -sample-sec=5 -fanout=2 -ttl=3
   %s -id=drone-3 -udp-port=7001 -tcp-port=8081
+  %s -id=drone-4 -delta-push-sec=3 -anti-entropy-sec=30
 
 OPTIONS:
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 
 	flag.PrintDefaults()
 
