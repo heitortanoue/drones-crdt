@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -16,24 +17,31 @@ type FireReading struct {
 
 // FireSensor represents a simple fire sensor that collects readings
 type FireSensor struct {
-	readings  []FireReading        // Accumulated list of readings
-	generator *FireSensorGenerator // Automatic generator
-	sensorID  string               // Unique sensor ID
-	mutex     sync.RWMutex         // Concurrency protection
+	readings  []FireReading
+	generator *FireSensorGenerator
+	sensorID  string
+	mutex     sync.RWMutex
+	posX      int
+	posY      int
+	posMutex  sync.RWMutex
+	gridSizeX int
+	gridSizeY int
 }
 
 // NewFireSensor creates a new fire sensor instance
-func NewFireSensor(sensorID string, sampleInterval time.Duration) *FireSensor {
-	generator := NewFireSensorGenerator(sensorID, sampleInterval)
-
+func NewFireSensor(sensorID string, sampleInterval time.Duration, gridSizeX, gridSizeY int) *FireSensor {
 	sensor := &FireSensor{
 		readings:  make([]FireReading, 0),
-		generator: generator,
 		sensorID:  sensorID,
+		posX:      gridSizeX / 2,
+		posY:      gridSizeY / 2,
+		gridSizeX: gridSizeX,
+		gridSizeY: gridSizeY,
 	}
 
-	// Set circular reference for the generator
+	generator := NewFireSensorGenerator(sensorID, sampleInterval, gridSizeX, gridSizeY)
 	generator.SetSensor(sensor)
+	sensor.generator = generator
 
 	return sensor
 }
@@ -105,14 +113,52 @@ func (fs *FireSensor) GetStats() map[string]interface{} {
 	readingCount := len(fs.readings)
 	fs.mutex.RUnlock()
 
+	fs.posMutex.RLock()
+	posX, posY := fs.posX, fs.posY
+	fs.posMutex.RUnlock()
+
 	return map[string]interface{}{
 		"sensor_id":     fs.sensorID,
 		"reading_count": readingCount,
+		"position":      map[string]int{"x": posX, "y": posY},
 		"generator":     fs.generator.GetStats(),
 	}
 }
 
-// GenerateTimestamp creates a current timestamp in milliseconds
+func (fs *FireSensor) SetPosition(x, y int) error {
+	if x < 0 || x >= fs.gridSizeX || y < 0 || y >= fs.gridSizeY {
+		return &PositionError{
+			X:         x,
+			Y:         y,
+			GridSizeX: fs.gridSizeX,
+			GridSizeY: fs.gridSizeY,
+		}
+	}
+
+	fs.posMutex.Lock()
+	fs.posX = x
+	fs.posY = y
+	fs.posMutex.Unlock()
+
+	return nil
+}
+
+func (fs *FireSensor) GetPosition() (int, int) {
+	fs.posMutex.RLock()
+	defer fs.posMutex.RUnlock()
+	return fs.posX, fs.posY
+}
+
+type PositionError struct {
+	X, Y                 int
+	GridSizeX, GridSizeY int
+}
+
+func (e *PositionError) Error() string {
+	return fmt.Sprintf("position (%d, %d) is out of grid bounds (0-%d, 0-%d)",
+		e.X, e.Y, e.GridSizeX-1, e.GridSizeY-1)
+}
+
 func GenerateTimestamp() int64 {
 	return time.Now().UnixMilli()
 }

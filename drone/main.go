@@ -58,13 +58,10 @@ func main() {
 	// Neighbor table
 	neighborTable := network.NewNeighborTable(cfg.NeighborTimeout)
 
-	// Initialize global state
 	state.InitGlobalState(cfg.DroneID)
 
-	// Sensor system
-	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval)
+	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval, cfg.GridSize.X, cfg.GridSize.Y)
 
-	// UDP and TCP servers
 	udpServer := network.NewUDPServer(cfg.DroneID, cfg.UDPPort, neighborTable)
 	tcpServer := network.NewTCPServer(cfg.DroneID, cfg.TCPPort)
 
@@ -88,6 +85,7 @@ func main() {
 	tcpServer.DeltaHandler = createDeltaHandler(sensorAPI, disseminationSystem)
 	tcpServer.StateHandler = createStateHandler(sensorAPI)
 	tcpServer.StatsHandler = createStatsHandler(sensorAPI, neighborTable, controlSystem, disseminationSystem)
+	tcpServer.PositionHandler = createPositionHandler(sensorAPI)
 
 	// Graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -165,6 +163,7 @@ OPTIONS:
 ENDPOINTS (TCP):
   POST /sensor     - Add a sensor reading
   POST /delta      - Receive deltas from other drones
+  POST /position   - Update drone position {x: int, y: int}
   GET  /state      - Current CRDT state
   GET  /stats      - Drone statistics
 `)
@@ -273,6 +272,39 @@ func createStatsHandler(sensorAPI *sensor.FireSensor, neighborTable *network.Nei
 			"control":       controlStats,
 			"dissemination": disseminationStats,
 			"uptime":        time.Since(startTime).Seconds(),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func createPositionHandler(sensorAPI *sensor.FireSensor) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var position struct {
+			X int `json:"x"`
+			Y int `json:"y"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&position); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if err := sensorAPI.SetPosition(position.X, position.Y); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		response := map[string]interface{}{
+			"message": "Position updated successfully",
+			"x":       position.X,
+			"y":       position.Y,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

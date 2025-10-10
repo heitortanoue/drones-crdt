@@ -7,22 +7,20 @@ import (
 	"strconv"
 )
 
-// TCPServer manages TCP communication on the given port (data channel)
 type TCPServer struct {
 	port    int
 	mux     *http.ServeMux
 	droneID string
 	server  *http.Server
 
-	// Handlers that can be defined externally
-	SensorHandler  http.HandlerFunc
-	DeltaHandler   http.HandlerFunc
-	StateHandler   http.HandlerFunc
-	StatsHandler   http.HandlerFunc
-	CleanupHandler http.HandlerFunc
+	SensorHandler   http.HandlerFunc
+	DeltaHandler    http.HandlerFunc
+	StateHandler    http.HandlerFunc
+	StatsHandler    http.HandlerFunc
+	CleanupHandler  http.HandlerFunc
+	PositionHandler http.HandlerFunc
 }
 
-// NewTCPServer creates a new TCP server
 func NewTCPServer(droneID string, port int) *TCPServer {
 	mux := http.NewServeMux()
 
@@ -48,6 +46,7 @@ func (s *TCPServer) setupRoutes() {
 	s.mux.HandleFunc("/state", s.handleStateWrapper)
 	s.mux.HandleFunc("/stats", s.handleStatsWrapper)
 	s.mux.HandleFunc("/cleanup", s.handleCleanupWrapper)
+	s.mux.HandleFunc("/position", s.handlePositionWrapper)
 }
 
 // Start launches the TCP server
@@ -115,7 +114,14 @@ func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// sendNotImplemented sends a "not implemented" JSON response
+func (s *TCPServer) handlePositionWrapper(w http.ResponseWriter, r *http.Request) {
+	if s.PositionHandler != nil {
+		s.PositionHandler(w, r)
+	} else {
+		s.sendNotImplemented(w, "Position handler")
+	}
+}
+
 func (s *TCPServer) sendNotImplemented(w http.ResponseWriter, feature string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)

@@ -4,33 +4,32 @@ import (
 	"time"
 )
 
-// DroneConfig configuração centralizada do drone
-type DroneConfig struct {
-	// Identificação
-	DroneID string `json:"drone_id"`
-
-	// Rede
-	UDPPort  int    `json:"udp_port"`  // porta 7000 para controle
-	TCPPort  int    `json:"tcp_port"`  // porta 8080 para dados
-	BindAddr string `json:"bind_addr"` // endereço para bind
-
-	// Coleta de dados
-	SampleInterval time.Duration `json:"sample_interval"` // intervalo entre leituras
-
-	// Gossip
-	Fanout int `json:"fanout"` // número de vizinhos para gossip
-	TTL    int `json:"ttl"`    // TTL inicial para mensagens
-
-	// Dissemination intervals
-	DeltaPushInterval   time.Duration `json:"delta_push_interval"`   // intervalo entre envios de delta (5s)
-	AntiEntropyInterval time.Duration `json:"anti_entropy_interval"` // intervalo de anti-entropy (60s)
-
-	// Timeouts e intervalos
-	NeighborTimeout    time.Duration `json:"neighbor_timeout"`    // timeout para expirar vizinhos (9s)
-	TransmitterTimeout time.Duration `json:"transmitter_timeout"` // timeout para transmissor (5s)
+type GridSize struct {
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
-// DefaultConfig retorna configuração padrão
+type DroneConfig struct {
+	DroneID string `json:"drone_id"`
+
+	UDPPort  int    `json:"udp_port"`
+	TCPPort  int    `json:"tcp_port"`
+	BindAddr string `json:"bind_addr"`
+
+	SampleInterval time.Duration `json:"sample_interval"`
+
+	Fanout int `json:"fanout"`
+	TTL    int `json:"ttl"`
+
+	DeltaPushInterval   time.Duration `json:"delta_push_interval"`
+	AntiEntropyInterval time.Duration `json:"anti_entropy_interval"`
+
+	NeighborTimeout    time.Duration `json:"neighbor_timeout"`
+	TransmitterTimeout time.Duration `json:"transmitter_timeout"`
+
+	GridSize GridSize `json:"grid_size"`
+}
+
 func DefaultConfig() *DroneConfig {
 	return &DroneConfig{
 		DroneID:             "drone-1",
@@ -40,9 +39,10 @@ func DefaultConfig() *DroneConfig {
 		SampleInterval:      10 * time.Second,
 		Fanout:              3,
 		TTL:                 4,
-		DeltaPushInterval:   5 * time.Second,  // Delta push a cada 5s
-		AntiEntropyInterval: 60 * time.Second, // Anti-entropy a cada 60s
+		DeltaPushInterval:   5 * time.Second,
+		AntiEntropyInterval: 60 * time.Second,
 		NeighborTimeout:     9 * time.Second,
 		TransmitterTimeout:  5 * time.Second,
+		GridSize:            GridSize{X: 1000, Y: 1000},
 	}
 }

@@ -6,9 +6,9 @@ import (
 )
 
 func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
-	sensor := NewFireSensor("test-sensor", 100*time.Millisecond)
+	gridSize := 1000
+	sensor := NewFireSensor("test-sensor", 100*time.Millisecond, gridSize, gridSize)
 
-	// Check initial state
 	if sensor.generator.running {
 		t.Error("Generator should not be running initially")
 	}
@@ -35,19 +35,17 @@ func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 		t.Error("Generator should not be running after Stop()")
 	}
 
-	// Verify that readings were generated
 	readings := sensor.GetReadings()
 	if len(readings) < 2 {
 		t.Errorf("Expected at least 2 readings, got %d", len(readings))
 	}
 
-	// Validate readings are within expected area
 	for _, reading := range readings {
-		if reading.X < sensor.generator.baseX || reading.X >= sensor.generator.baseX+sensor.generator.gridSize {
-			t.Errorf("X coordinate out of expected area: %d", reading.X)
+		if reading.X < 0 || reading.X >= gridSize {
+			t.Errorf("X coordinate out of grid bounds: %d (expected 0-%d)", reading.X, gridSize-1)
 		}
-		if reading.Y < sensor.generator.baseY || reading.Y >= sensor.generator.baseY+sensor.generator.gridSize {
-			t.Errorf("Y coordinate out of expected area: %d", reading.Y)
+		if reading.Y < 0 || reading.Y >= gridSize {
+			t.Errorf("Y coordinate out of grid bounds: %d (expected 0-%d)", reading.Y, gridSize-1)
 		}
 		if reading.Confidence < 0 || reading.Confidence > 100 {
 			t.Errorf("Confidence out of valid range: %f", reading.Confidence)
@@ -59,9 +57,9 @@ func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 }
 
 func TestFireSensor_ManualReadings(t *testing.T) {
-	sensor := NewFireSensor("manual-test-sensor", time.Hour) // Long interval to avoid interference
+	gridSize := 1000
+	sensor := NewFireSensor("manual-test-sensor", time.Hour, gridSize, gridSize)
 
-	// Add a manual reading
 	sensor.AddManualReading(15, 25, 85.5)
 
 	readings := sensor.GetReadings()
@@ -82,9 +80,9 @@ func TestFireSensor_ManualReadings(t *testing.T) {
 }
 
 func TestFireSensor_GetAndClearReadings(t *testing.T) {
-	sensor := NewFireSensor("clear-test-sensor", time.Hour)
+	gridSize := 1000
+	sensor := NewFireSensor("clear-test-sensor", time.Hour, gridSize, gridSize)
 
-	// Add a few readings
 	sensor.AddManualReading(10, 20, 75.0)
 	sensor.AddManualReading(15, 25, 80.0)
 	sensor.AddManualReading(20, 30, 90.0)
