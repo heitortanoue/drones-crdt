@@ -36,7 +36,7 @@ func DefaultConfig() *DroneConfig {
 		UDPPort:             7000,
 		TCPPort:             8080,
 		BindAddr:            "0.0.0.0",
-		SampleInterval:      10 * time.Second,
+		SampleInterval:      50 * time.Millisecond,
 		Fanout:              3,
 		TTL:                 4,
 		DeltaPushInterval:   5 * time.Second,

@@ -1,0 +1,84 @@
+import os
+import threading
+import csv
+from mininet.log import setLogLevel, info
+from mn_wifi.cli import CLI
+
+from drone_utils import setup_topology, fetch_states
+from drone_ui import setup_UI
+from config import (
+    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR,
+)
+
+def main():
+    """Main execution function."""
+    try:
+        os.system(f'sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null')
+    except:
+        pass
+    
+    setLogLevel('info')
+    
+    net, drones = setup_topology()
+    
+    info("*** Building the network ***\n")
+    net.build()
+    net.start()
+
+    info("--- Starting Go applications on drones... ---\n")
+    for i, drone in enumerate(net.stations, 1):
+        drone_id = f'drone-go-{i}'
+        command = (f"{EXEC_PATH} -id={drone_id} "
+                   f"-tcp-port={TCP_PORT} -udp-port={UDP_PORT} -delta-push-sec=1 -anti-entropy-sec=1000000 ")
+        drone.cmd(f'xterm -e "{command}" &')
+
+    info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
+    csv_files = {}
+    csv_writers = {}
+    
+    # Use a try...finally block to ensure files are always closed properly.
+    try:
+        for drone in drones:
+            filename = os.path.join(OUTPUT_DIR, f"{drone.name}_data.csv")
+            # Open file in write mode with newline='' to prevent blank rows
+            file_handle = open(filename, 'w', newline='')
+            writer = csv.writer(file_handle)
+            # Write the header row
+            writer.writerow(['timestamp', 'all_deltas', 'confidence', 'position', 'repetition', 'convergence'])
+            
+            csv_files[drone.name] = file_handle
+            csv_writers[drone.name] = writer
+            info(f"Opened {filename} for data logging.\n")
+
+        stop_event = threading.Event()
+        fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
+        fetch_thread.start()
+        running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
+        running_ui_thread.start()
+
+        info("\n*** Simulation is running. CSV data is being saved in 'drone_execution_data'. ***\n")
+        info("*** Type 'exit' or Ctrl+D in the CLI to quit. ***\n")
+        CLI(net)
+
+    finally:
+        info("*** Shutting down simulation ***\n")
+        if 'stop_event' in locals():
+            stop_event.set()
+        if 'fetch_thread' in locals():
+            fetch_thread.join(timeout=5)
+        if 'running_ui_thread' in locals():
+            running_ui_thread.join(timeout=5)
+
+        # Close all open CSV files
+        for file_handle in csv_files.values():
+            file_handle.close()
+        info("Closed all data log files.\n")
+
+    info("*** Shutting down simulation ***\n")
+    net.stop()
+
+if __name__ == '__main__':
+    main()
+    # Final cleanup of any lingering Go processes
+    os.system(f'sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null')
+    info("--- Simulation finished ---\n")

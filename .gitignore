@@ -1,2 +1,3 @@
 **/bin
 /simulator/drone_execution_data/
+/simulator/__pycache__/
