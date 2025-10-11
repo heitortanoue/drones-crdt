@@ -43,6 +43,6 @@ func DefaultConfig() *DroneConfig {
 		AntiEntropyInterval: 60 * time.Second,
 		NeighborTimeout:     9 * time.Second,
 		TransmitterTimeout:  5 * time.Second,
-		GridSize:            GridSize{X: 1000, Y: 1000},
+		GridSize:            GridSize{X: 2500, Y: 2500},
 	}
 }

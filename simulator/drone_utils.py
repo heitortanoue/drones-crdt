@@ -61,6 +61,23 @@ def setup_topology():
 
     return net, drones
 
+def send_drone_location(drone):
+    """Sends the current location of the drone to its Go application."""
+    position = drone.position
+    command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
+    -H "Content-Type: application/json" \
+    -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}'"""
+    response = drone.cmd(command).strip()
+
+def send_locations(drones, stop_event):
+    """Sends the locations of all drones periodically."""
+    while not stop_event.is_set():
+        stop_event.wait(duration)
+        if stop_event.is_set():
+            break
+        for drone in drones:
+            send_drone_location(drone)
+
 def fetch_stats(drone):
     command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats'
     response_str = drone.cmd(command).strip()

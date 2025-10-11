@@ -1,13 +1,14 @@
 import os
 import threading
 import csv
+import time
 from mininet.log import setLogLevel, info
 from mn_wifi.cli import CLI
 
-from drone_utils import setup_topology, fetch_states
+from drone_utils import setup_topology, fetch_states, send_locations
 from drone_ui import setup_UI
 from config import (
-    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR,
+    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR, duration
 )
 
 def main():
@@ -53,6 +54,9 @@ def main():
         stop_event = threading.Event()
         fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
         fetch_thread.start()
+        time.sleep(duration/2)  # Ensure fetch thread starts before sending locations
+        send_thread = threading.Thread(target=send_locations, args=(drones, stop_event), daemon=True)
+        send_thread.start()
         running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
         running_ui_thread.start()
 
