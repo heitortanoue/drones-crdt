@@ -16,6 +16,11 @@ ATTENUATION = 4.5  # Attenuation exponent for the propagation model
 X_MAX, Y_MAX = 2500, 2500  # Size of the simulation area
 SIMULATION_MULTIPLIER = 1  # Speed multiplier for the simulation time
 FETCH_INTERVAL = 8  # Interval in seconds to fetch drone states
+DELTA_PUSH_INTERVAL = 1  # Interval in seconds to push deltas to neighbors
+ANTI_ENTROPY_INTERVAL = 2 # Interval in seconds for anti-entrop
+BIND_ADDR = '0.0.0.0' # Address to bind the drone application
+TTL = 4 # Time-to-live for gossip messages
+FANOUT = 3 # Number of neighbors to gossip with
 
 EXEC_PATH = '../drone/bin/drone-linux'  # Path to the compiled Go drone application
 OUTPUT_DIR = 'drone_execution_data/'   # Directory for telemetry logs
@@ -31,4 +36,7 @@ DRONE_IPs = {
     for i, name in enumerate(DRONE_NAMES, 1)
 }
 duration = FETCH_INTERVAL / SIMULATION_MULTIPLIER  # fetch state every 'duration' seconds, considering the speed multiplier
+delta_push_interval = DELTA_PUSH_INTERVAL / SIMULATION_MULTIPLIER  # push deltas every 'delta_push_interval' seconds, considering the speed multiplier
+anti_entropy_interval = ANTI_ENTROPY_INTERVAL / SIMULATION_MULTIPLIER  # anti-entropy every 'anti_entropy_interval' seconds, considering the speed multiplier
+ttl = TTL / SIMULATION_MULTIPLIER  # TTL every 'ttl' seconds, considering the speed multiplier
 # ---------------------------------------------------------------

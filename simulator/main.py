@@ -8,7 +8,7 @@ from mn_wifi.cli import CLI
 from drone_utils import setup_topology, fetch_states, send_locations
 from drone_ui import setup_UI
 from config import (
-    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR, duration
+    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR, BIND_ADDR, FANOUT, duration, delta_push_interval, anti_entropy_interval, ttl
 )
 
 def main():
@@ -30,7 +30,7 @@ def main():
     for i, drone in enumerate(net.stations, 1):
         drone_id = f'drone-go-{i}'
         command = (f"{EXEC_PATH} -id={drone_id} "
-                   f"-tcp-port={TCP_PORT} -udp-port={UDP_PORT} -delta-push-sec=1 -anti-entropy-sec=1000000 ")
+                   f"-tcp-port={TCP_PORT} -udp-port={UDP_PORT} -delta-push-sec={delta_push_interval} -anti-entropy-sec={anti_entropy_interval} -ttl={ttl} -bind={BIND_ADDR} -fanout={FANOUT} -sample-sec={duration} &")
         drone.cmd(f'xterm -e "{command}" &')
 
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
