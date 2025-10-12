@@ -35,20 +35,28 @@ func (ds *DroneState) AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	// Generate a new dot and add it to the CRDT
-	if ds.fires.Delta == nil {
-		ds.fires.Delta = crdt.NewDotKernel[crdt.Cell]()
+	// Use AWORSet.Add which follows the reference implementation:
+	// - First removes old occurrences of the cell
+	// - Then adds with a new dot
+	// - Updates both Core and Delta contexts
+	ds.fires.Add(ds.droneID, cell)
+
+	// Find the newly added dot to store metadata
+	var newDot crdt.Dot
+	for dot, c := range ds.fires.Core.Entries {
+		if c == cell && dot.NodeID == ds.droneID {
+			// This is the most recent dot for this cell from this drone
+			if dot.Counter > newDot.Counter {
+				newDot = dot
+			}
+		}
 	}
 
-	dot := ds.fires.Core.Context.NextDot(ds.droneID)
-	ds.fires.Core.Entries[dot] = cell
-	ds.fires.Delta.Entries[dot] = cell
-
-	// Store metadata
-	ds.metadata[dot] = meta
+	// Store metadata for the new dot
+	ds.metadata[newDot] = meta
 
 	log.Printf("[STATE] Fire detection added at (%d, %d) with dot %s",
-		cell.X, cell.Y, dot.String()[:8])
+		cell.X, cell.Y, newDot.String()[:8])
 }
 
 // RemoveFire removes a cell from the state (when fire is extinguished)
@@ -56,13 +64,20 @@ func (ds *DroneState) RemoveFire(cell crdt.Cell) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	ds.fires.Remove(cell)
-
-	// Remove metadata of removed cells
+	// Collect dots to remove metadata before removing from CRDT
+	var dotsToRemove []crdt.Dot
 	for dot, storedCell := range ds.fires.Core.Entries {
 		if storedCell == cell {
-			delete(ds.metadata, dot)
+			dotsToRemove = append(dotsToRemove, dot)
 		}
+	}
+
+	// Remove from CRDT (marks in both Core and Delta contexts)
+	ds.fires.Remove(cell)
+
+	// Remove metadata for the removed dots
+	for _, dot := range dotsToRemove {
+		delete(ds.metadata, dot)
 	}
 
 	log.Printf("[STATE] Fire detection removed at (%d, %d)", cell.X, cell.Y)
@@ -73,22 +88,35 @@ func (ds *DroneState) MergeDelta(delta crdt.FireDelta) {
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	// 1) Rebuild a temporary kernel from the delta
+	// 1) Create a deep copy of the context to avoid pointer aliasing issues
+	contextCopy := crdt.DotContext{
+		Clock:    make(crdt.VectorClock, len(delta.Context.Clock)),
+		DotCloud: make(crdt.DotCloud, len(delta.Context.DotCloud)),
+	}
+	for k, v := range delta.Context.Clock {
+		contextCopy.Clock[k] = v
+	}
+	for k, v := range delta.Context.DotCloud {
+		contextCopy.DotCloud[k] = v
+	}
+
+	// 2) Rebuild a temporary kernel from the delta
 	kernel := &crdt.DotKernel[crdt.Cell]{
-		Context: &delta.Context,
+		Context: &contextCopy,
 		Entries: make(map[crdt.Dot]crdt.Cell, len(delta.Entries)),
 	}
 
-	// 2) Fill the Dot→Cell map and store metadata
+	// 3) Fill the Dot→Cell map and store metadata
 	for _, entry := range delta.Entries {
 		kernel.Entries[entry.Dot] = entry.Cell
 		ds.metadata[entry.Dot] = entry.Meta
 	}
 
-	// 3) Apply merge of the CRDT state only
+	// 4) Apply merge of the CRDT state
 	ds.fires.MergeDelta(kernel)
 
-	log.Printf("[STATE] Delta applied with %d entries", len(delta.Entries))
+	log.Printf("[STATE] Delta applied with %d entries from context clock=%v",
+		len(delta.Entries), delta.Context.Clock)
 }
 
 // GenerateDelta generates a delta of local changes for dissemination

@@ -189,18 +189,37 @@ func NewAWORSet[E comparable]() *AWORSet[E] {
 }
 
 // Add inserts v and records the operation in Delta.
+// Following the reference implementation: optimization that first deletes val
 func (s *AWORSet[E]) Add(nodeID string, v E) {
 	if s.Delta == nil {
 		s.Delta = NewDotKernel[E]()
 	}
+
+	for d, vv := range s.Core.Entries {
+		if vv == v {
+			delete(s.Core.Entries, d)
+			// Mark removal in contexts
+			s.Core.Context.DotCloud[d] = true
+			s.Delta.Context.DotCloud[d] = true
+		}
+	}
+
 	// Generate a new dot in Core's context
 	d := s.Core.Context.NextDot(nodeID)
+
 	// Add to Core and Delta
 	s.Core.Entries[d] = v
 	s.Delta.Entries[d] = v
+
+	// Update Delta context to reflect this addition
+	s.Delta.Context.Clock[nodeID] = d.Counter
+
+	// Compact contexts to avoid unbounded cloud growth
+	s.Core.Context.compact()
+	s.Delta.Context.compact()
 }
 
-// Remove deletes all occurrences of v and marks removals in Delta.Context.
+// Remove deletes all occurrences of v and marks removals in both contexts.
 func (s *AWORSet[E]) Remove(v E) {
 	if s.Delta == nil {
 		s.Delta = NewDotKernel[E]()
@@ -208,18 +227,21 @@ func (s *AWORSet[E]) Remove(v E) {
 	for d, vv := range s.Core.Entries {
 		if vv == v {
 			delete(s.Core.Entries, d)
-			// Mark the removal in Delta's context
+			// Mark the removal in both Core and Delta contexts
+			s.Core.Context.DotCloud[d] = true
 			s.Delta.Context.DotCloud[d] = true
 		}
 	}
-	// Compact Delta's context to avoid unbounded cloud growth
+	// Compact both contexts to avoid unbounded cloud growth
+	s.Core.Context.compact()
 	s.Delta.Context.compact()
 }
 
-// MergeDelta applies a received delta kernel into Core and clears Delta.
+// MergeDelta applies a received delta kernel into Core.
+// Following the reference implementation: join does NOT clear local delta.
+// Delta should be cleared explicitly after successful dissemination.
 func (s *AWORSet[E]) MergeDelta(delta *DotKernel[E]) {
 	s.Core.Merge(delta)
-	s.Delta = nil
 }
 
 // Merge incorporates another full AWORSet (state-based merge).
