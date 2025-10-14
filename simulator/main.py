@@ -8,7 +8,16 @@ from mn_wifi.cli import CLI
 from drone_utils import setup_topology, fetch_states, send_locations
 from drone_ui import setup_UI
 from config import (
-    EXEC_PATH, TCP_PORT, UDP_PORT, OUTPUT_DIR, BIND_ADDR, FANOUT, duration, delta_push_interval, anti_entropy_interval, ttl
+    EXEC_PATH,
+    TCP_PORT,
+    UDP_PORT,
+    OUTPUT_DIR,
+    BIND_ADDR,
+    FANOUT,
+    duration,
+    delta_push_interval,
+    anti_entropy_interval,
+    ttl
 )
 
 def main():
@@ -30,7 +39,14 @@ def main():
     for i, drone in enumerate(net.stations, 1):
         drone_id = f'drone-go-{i}'
         command = (f"{EXEC_PATH} -id={drone_id} "
-                   f"-tcp-port={TCP_PORT} -udp-port={UDP_PORT} -delta-push-sec={delta_push_interval} -anti-entropy-sec={anti_entropy_interval} -ttl={ttl} -bind={BIND_ADDR} -fanout={FANOUT} -sample-sec={duration} &")
+                   f"-tcp-port={TCP_PORT} "
+                   f"-udp-port={UDP_PORT} "
+                   f"-delta-push-sec={int(delta_push_interval)} "
+                   f"-anti-entropy-sec={int(anti_entropy_interval)} "
+                   f"-ttl={int(ttl)} "
+                   f"-bind={BIND_ADDR} "
+                   f"-fanout={FANOUT} "
+                   f"-sample-sec={int(duration)} ")
         drone.cmd(f'xterm -e "{command}" &')
 
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
@@ -45,18 +61,29 @@ def main():
             file_handle = open(filename, 'w', newline='')
             writer = csv.writer(file_handle)
             # Write the header row
-            writer.writerow(['timestamp', 'all_deltas', 'confidence', 'position', 'repetition', 'convergence'])
+            writer.writerow(
+                ['timestamp',
+                'all_deltas',
+                'confidence',
+                'position',
+                'repetition',
+                'convergence']
+            )
             
             csv_files[drone.name] = file_handle
             csv_writers[drone.name] = writer
             info(f"Opened {filename} for data logging.\n")
 
         stop_event = threading.Event()
+
         fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
         fetch_thread.start()
+
         time.sleep(duration/2)  # Ensure fetch thread starts before sending locations
+
         send_thread = threading.Thread(target=send_locations, args=(drones, stop_event), daemon=True)
         send_thread.start()
+        
         running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
         running_ui_thread.start()
 
