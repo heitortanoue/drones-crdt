@@ -3,7 +3,6 @@ package sensor
 import (
 	"log"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/heitortanoue/tcc/pkg/crdt"
@@ -18,21 +17,17 @@ type FireSensorGenerator struct {
 	stopCh    chan struct{}
 	gridSizeX int
 	gridSizeY int
-
-	activeFires map[crdt.Cell]time.Time
-	fireMutex   sync.RWMutex
 }
 
 // NewFireSensorGenerator creates a new fire detection generator
 func NewFireSensorGenerator(sensorID string, interval time.Duration, gridSizeX, gridSizeY int) *FireSensorGenerator {
 	return &FireSensorGenerator{
-		sensorID:    sensorID,
-		interval:    interval,
-		running:     false,
-		stopCh:      make(chan struct{}),
-		gridSizeX:   gridSizeX,
-		gridSizeY:   gridSizeY,
-		activeFires: make(map[crdt.Cell]time.Time),
+		sensorID:  sensorID,
+		interval:  interval,
+		running:   false,
+		stopCh:    make(chan struct{}),
+		gridSizeX: gridSizeX,
+		gridSizeY: gridSizeY,
 	}
 }
 
@@ -76,12 +71,7 @@ func (fsg *FireSensorGenerator) generateLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			// Randomly decide: add new fire or remove existing one
-			if rand.Float64() < 0.7 { // 70% chance to add
-				fsg.generateDetection()
-			} else { // 30% chance to remove
-				fsg.removeRandomFire()
-			}
+			fsg.generateDetection()
 		case <-fsg.stopCh:
 			log.Printf("[GENERATOR] Detection loop terminated for %s", fsg.sensorID)
 			return
@@ -89,21 +79,24 @@ func (fsg *FireSensorGenerator) generateLoop() {
 	}
 }
 
-// generateDetection creates a simulated fire detection (ADD)
+// generateDetection creates a simulated fire detection
+// Randomly decides to ADD or REMOVE fires near the drone's position
 func (fsg *FireSensorGenerator) generateDetection() {
 	if fsg.sensor == nil {
 		return
 	}
 
 	posX, posY := fsg.sensor.GetPosition()
-
 	fireRadius := 10
+
+	// Generate random position within fireRadius
 	offsetX := rand.Intn(2*fireRadius+1) - fireRadius
 	offsetY := rand.Intn(2*fireRadius+1) - fireRadius
 
 	x := posX + offsetX
 	y := posY + offsetY
 
+	// Clamp to grid boundaries
 	if x < 0 {
 		x = 0
 	}
@@ -117,11 +110,38 @@ func (fsg *FireSensorGenerator) generateDetection() {
 		y = fsg.gridSizeY - 1
 	}
 
+	cell := crdt.Cell{X: x, Y: y}
+
 	var confidence float64
 	if rand.Float64() < 0.1 {
 		confidence = 70.0 + rand.Float64()*30.0
 	} else {
 		confidence = 10.0 + rand.Float64()*40.0
+	}
+
+	if confidence < 50.0 {
+		// Low confidence - ignore
+		log.Printf("[GENERATOR] %s IGNORE: (%d,%d) confidence=%.1f%% (below threshold)",
+			fsg.sensorID, x, y, confidence)
+		return
+	}
+
+	// Check if fire already exists in state
+	activeFires := state.GetActiveFires()
+	fireExists := false
+	for _, activeCell := range activeFires {
+		if activeCell.X == cell.X && activeCell.Y == cell.Y {
+			fireExists = true
+			break
+		}
+	}
+
+	// Fire already detected at this cell - REMOVE it
+	if fireExists {
+		state.RemoveFire(cell)
+		log.Printf("[GENERATOR] %s REMOVE: (%d,%d) - fire already detected, removing",
+			fsg.sensorID, x, y)
+		return
 	}
 
 	reading := FireReading{
@@ -134,7 +154,6 @@ func (fsg *FireSensorGenerator) generateDetection() {
 
 	fsg.sensor.AddReading(reading)
 
-	cell := crdt.Cell{X: reading.X, Y: reading.Y}
 	meta := crdt.FireMeta{
 		Timestamp:  reading.Timestamp,
 		Confidence: reading.Confidence,
@@ -142,65 +161,17 @@ func (fsg *FireSensorGenerator) generateDetection() {
 
 	state.AddFire(cell, meta)
 
-	// Track this fire for potential removal
-	fsg.fireMutex.Lock()
-	fsg.activeFires[cell] = time.Now()
-	fsg.fireMutex.Unlock()
-
 	log.Printf("[GENERATOR] %s ADD: (%d,%d) confidence=%.1f%%",
 		fsg.sensorID, x, y, confidence)
 }
 
-// removeRandomFire removes a random active fire (REMOVE)
-func (fsg *FireSensorGenerator) removeRandomFire() {
-	fsg.fireMutex.Lock()
-	defer fsg.fireMutex.Unlock()
-
-	if len(fsg.activeFires) == 0 {
-		return
-	}
-
-	// Select random fire to remove
-	var selectedCell crdt.Cell
-	i := rand.Intn(len(fsg.activeFires))
-	for cell := range fsg.activeFires {
-		if i == 0 {
-			selectedCell = cell
-			break
-		}
-		i--
-	}
-
-	// Remove from global state
-	state.RemoveFire(selectedCell)
-	delete(fsg.activeFires, selectedCell)
-
-	log.Printf("[GENERATOR] %s REMOVE: (%d,%d) - fire extinguished",
-		fsg.sensorID, selectedCell.X, selectedCell.Y)
-}
-
 // GetStats returns statistics for the generator
 func (fsg *FireSensorGenerator) GetStats() map[string]interface{} {
-	fsg.fireMutex.RLock()
-	activeCount := len(fsg.activeFires)
-	fsg.fireMutex.RUnlock()
 
 	return map[string]interface{}{
 		"sensor_id":    fsg.sensorID,
 		"running":      fsg.running,
 		"interval_sec": fsg.interval.Seconds(),
 		"grid_size":    map[string]int{"x": fsg.gridSizeX, "y": fsg.gridSizeY},
-		"active_fires": activeCount,
 	}
-}
-
-func hashString(s string) int {
-	hash := 0
-	for _, char := range s {
-		hash = (hash*31 + int(char)) % 1000
-	}
-	if hash < 0 {
-		hash = -hash
-	}
-	return hash
 }

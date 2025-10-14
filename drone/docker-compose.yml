@@ -3,9 +3,10 @@ services:
     build: .
     entrypoint: /bin/sh -c "exec /app/drone \
       -id=$(hostname) \
-      -sample-sec=${SAMPLE_SEC:-10} \
+      -sample-sec=${SAMPLE_SEC:-5} \
       -fanout=${FANOUT:-3} \
       -ttl=${TTL:-4} \
+      -anti-entropy-sec=${ANTI_ENTROPY_INTERVAL:-100} \
       -bind=0.0.0.0"
 
     expose:
