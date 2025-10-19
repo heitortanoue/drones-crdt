@@ -55,8 +55,8 @@ def setup_topology():
 
     info("*** Configuring network nodes ***\n")
     net.configureNodes()
-    net.plotGraph()
-    net.plotEnergyMonitor()
+    #net.plotGraph()
+    net.plotEnergyMonitor(nodes=drones, single=True, title="FANET Energy Consumption")
     net.setMobilityModel(
         time=0,
         model=MOBILITY_MODEL,
