@@ -129,7 +129,11 @@ def fetch_state(drone):
     try:
         data = json.loads(response_str)
         # Extract data, assuming the first entry in latest_readings is the relevant one
-        reading_data = list(data['latest_readings'].values())[0]
+        reading_data = list(data['latest_readings'].values())
+        if reading_data == []:
+            return None, None, []
+        
+        reading_data = reading_data[0]
         timestamp_ms = reading_data['timestamp']
         confidence = reading_data['confidence']
         all_deltas = data['all_deltas']
@@ -155,6 +159,8 @@ def fetch_states(drones, stop_event, csv_writers):
             position = drone.position
             writer = csv_writers[drone.name]
             timestamp_ms, confidence, all_deltas = fetch_state(drone)
+            if timestamp_ms is None:
+                continue
             for delta in all_deltas:
                 drone_delta_sets[i].add(json.dumps(delta))
 
