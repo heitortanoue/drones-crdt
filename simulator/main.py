@@ -30,6 +30,7 @@ def main():
     setLogLevel('info')
     
     net, drones = setup_topology()
+    net.telemetry(nodes=drones, single=True, data_type='tx_bytes', title="FANET TX BYTES")
     
     info("*** Building the network ***\n")
     net.build()

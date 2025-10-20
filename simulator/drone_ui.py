@@ -118,20 +118,20 @@ class DroneControlPanel:
             neighbour_text = f"Currently {drone_name} has neighbours in range: {', '.join(neighbours)}"
         self.info_label.config(
             text=f"{neighbour_text}\n \
-            Is running?: {stats['control']['running']}\n \
+            Is running?: {stats.get('control', {}).get('running')}\n \
             Dissemination values\n \
-            Anti entropy count: {stats['dissemination']['anti_entropy_count']}\n \
-            Anti entropy interval (in seconds): {stats['dissemination']['anti_entropy_interval_sec']}\n \
-            Default ttl: {stats['dissemination']['default_ttl']}\n \
-            Delta push interval (in seconds): {stats['dissemination']['delta_push_interval_sec']}\n \
-            Sent Count: {stats['dissemination']['sent_count']}\n \
-            Received Count: {stats['dissemination']['received_count']}\n \
-            Dropped Count: {stats['dissemination']['dropped_count']}\n \
-            Fanout: {stats['dissemination']['fanout']}\n \
+            Anti entropy count: {stats.get('dissemination', {}).get('anti_entropy_count')}\n \
+            Anti entropy interval (in seconds): {stats.get('dissemination', {}).get('anti_entropy_interval_sec')}\n \
+            Default ttl: {stats.get('dissemination', {}).get('default_ttl')}\n \
+            Delta push interval (in seconds): {stats.get('dissemination', {}).get('delta_push_interval_sec')}\n \
+            Sent Count: {stats.get('dissemination', {}).get('sent_count')}\n \
+            Received Count: {stats.get('dissemination', {}).get('received_count')}\n \
+            Dropped Count: {stats.get('dissemination', {}).get('dropped_count')}\n \
+            Fanout: {stats.get('dissemination', {}).get('fanout')}\n \
             Sensor System\n \
-            Active fires: {stats['sensor_system']['generator']['active_fires']}\n \
-            Reading count: {stats['sensor_system']['reading_count']}\n \
-            Up time: {stats['uptime']}", foreground="blue")
+            Active fires: {stats.get('sensor_system', {}).get('generator', {}).get('active_fires')}\n \
+            Reading count: {stats.get('sensor_system', {}).get('reading_count')}\n \
+            Up time: {stats.get('uptime')}", foreground="blue")
 
     def get_stats(self):
         """Fetches and returns the stats of the selected drone."""
