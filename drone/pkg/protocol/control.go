@@ -15,6 +15,10 @@ type ControlSystem struct {
 	droneID   string
 	sensorAPI *sensor.FireSensor
 	udpSender UDPSender
+	
+	// Hello message configuration
+	helloInterval time.Duration
+	helloJitter   time.Duration
 
 	// Execution control
 	running bool
@@ -29,13 +33,15 @@ type UDPSender interface {
 }
 
 // NewControlSystem creates a new control system
-func NewControlSystem(droneID string, sensorAPI *sensor.FireSensor, udpSender UDPSender) *ControlSystem {
+func NewControlSystem(droneID string, sensorAPI *sensor.FireSensor, udpSender UDPSender, helloInterval, helloJitter time.Duration) *ControlSystem {
 	return &ControlSystem{
-		droneID:   droneID,
-		sensorAPI: sensorAPI,
-		udpSender: udpSender,
-		running:   false,
-		stopCh:    make(chan struct{}),
+		droneID:       droneID,
+		sensorAPI:     sensorAPI,
+		udpSender:     udpSender,
+		helloInterval: helloInterval,
+		helloJitter:   helloJitter,
+		running:       false,
+		stopCh:        make(chan struct{}),
 	}
 }
 
@@ -72,8 +78,10 @@ func (cs *ControlSystem) Stop() {
 // helloLoop periodically sends HELLO messages
 func (cs *ControlSystem) helloLoop() {
 	for {
-		// Random interval between 3–6 seconds
-		randomInterval := time.Duration(3000+rand.Intn(3000)) * time.Millisecond
+		// Calculate random interval: baseInterval ± jitter
+		// jitter is a random value in [-helloJitter, +helloJitter]
+		jitter := time.Duration(rand.Int63n(int64(cs.helloJitter)*2)) - cs.helloJitter
+		randomInterval := cs.helloInterval + jitter
 
 		select {
 		case <-time.After(randomInterval):

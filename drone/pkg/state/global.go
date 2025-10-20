@@ -49,8 +49,8 @@ func RemoveFire(cell crdt.Cell) {
 	}
 }
 
-// GetActiveFires returns the currently active fire cells from the global state
-func GetActiveFires() []crdt.Cell {
+// GetActiveFires returns the currently active fire cells with metadata from the global state
+func GetActiveFires() []FireWithMeta {
 	if globalState != nil {
 		return globalState.GetActiveFires()
 	}

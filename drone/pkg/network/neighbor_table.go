@@ -12,10 +12,14 @@ import (
 // Neighbor represents a neighbor discovered via UDP
 type Neighbor struct {
 	IP       net.IP    `json:"ip"`
-	Port     int       `json:"port"`    // TCP port for data
-	ID       string    `json:"id"`      // Drone ID (UUID)
-	Version  int       `json:"version"` // Last delta version of the drone
+	Port     int       `json:"port"` // TCP port for data
+	ID       string    `json:"id"`   // Drone ID (UUID)
 	LastSeen time.Time `json:"last_seen"`
+	LastSent time.Time `json:"last_sent"` // Last time a message was sent to this neighbor
+}
+
+func (neighbor *Neighbor) GetURL() string {
+	return fmt.Sprintf("http://%s:%d", neighbor.IP.String(), neighbor.Port)
 }
 
 // NeighborTable manages the table of discovered neighbors
@@ -83,6 +87,41 @@ func (nt *NeighborTable) GetNeighborURLs() []string {
 	return urls
 }
 
+// GetPrioritizedNeighborURLs returns active neighbors prioritized by least recently sent
+func (nt *NeighborTable) GetPrioritizedNeighborURLs(count int) []*Neighbor {
+	neighbors := nt.GetActiveNeighbors()
+
+	if len(neighbors) == 0 {
+		return []*Neighbor{}
+	}
+
+	// Sort by LastSent (oldest first, never sent = zero time = highest priority)
+	for i := 0; i < len(neighbors)-1; i++ {
+		for j := i + 1; j < len(neighbors); j++ {
+			if neighbors[i].LastSent.After(neighbors[j].LastSent) {
+				neighbors[i], neighbors[j] = neighbors[j], neighbors[i]
+			}
+		}
+	}
+
+	// Limit to requested count
+	if count > len(neighbors) {
+		count = len(neighbors)
+	}
+
+	return neighbors[:count]
+}
+
+// RecordSent updates the LastSent timestamp for a neighbor by ID
+func (nt *NeighborTable) RecordSent(neighborID string) {
+	nt.mutex.Lock()
+	defer nt.mutex.Unlock()
+
+	if neighbor, exists := nt.neighbors[neighborID]; exists {
+		neighbor.LastSent = time.Now()
+	}
+}
+
 // Count returns the number of active neighbors
 func (nt *NeighborTable) Count() int {
 	return len(nt.GetActiveNeighbors())
@@ -124,8 +163,8 @@ func (nt *NeighborTable) GetStats() map[string]interface{} {
 func (nt *NeighborTable) String() string {
 	result := "Neighbor Table:\n"
 	for _, neighbor := range nt.neighbors {
-		result += fmt.Sprintf("IP: %s, Port: %d, ID: %s, Version: %d, LastSeen: %s\n",
-			neighbor.IP.String(), neighbor.Port, neighbor.ID, neighbor.Version, neighbor.LastSeen.Format(time.RFC3339))
+		result += fmt.Sprintf("IP: %s, Port: %d, ID: %s, LastSeen: %s\n",
+			neighbor.IP.String(), neighbor.Port, neighbor.ID, neighbor.LastSeen.Format(time.RFC3339))
 	}
 	return result
 }

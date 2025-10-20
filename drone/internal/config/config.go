@@ -16,7 +16,8 @@ type DroneConfig struct {
 	TCPPort  int    `json:"tcp_port"`
 	BindAddr string `json:"bind_addr"`
 
-	SampleInterval time.Duration `json:"sample_interval"`
+	SampleInterval      time.Duration `json:"sample_interval"`
+	ConfidenceThreshold float64       `json:"confidence_threshold"` // Minimum confidence to accept fire detection
 
 	Fanout int `json:"fanout"`
 	TTL    int `json:"ttl"`
@@ -26,6 +27,9 @@ type DroneConfig struct {
 
 	NeighborTimeout    time.Duration `json:"neighbor_timeout"`
 	TransmitterTimeout time.Duration `json:"transmitter_timeout"`
+
+	HelloInterval time.Duration `json:"hello_interval"` // Base interval for hello messages
+	HelloJitter   time.Duration `json:"hello_jitter"`   // Random jitter added to hello interval
 
 	GridSize GridSize `json:"grid_size"`
 }
@@ -39,10 +43,13 @@ func DefaultConfig() *DroneConfig {
 		SampleInterval:      50 * time.Millisecond,
 		Fanout:              3,
 		TTL:                 4,
-		DeltaPushInterval:   5 * time.Second,
+		DeltaPushInterval:   1 * time.Second,
 		AntiEntropyInterval: 60 * time.Second,
-		NeighborTimeout:     9 * time.Second,
-		TransmitterTimeout:  5 * time.Second,
+		NeighborTimeout:     3 * time.Second,
+		TransmitterTimeout:  2 * time.Second,
+		HelloInterval:       1000 * time.Millisecond, // 1 second base interval
+		HelloJitter:         200 * time.Millisecond,  // ±200ms jitter
+		ConfidenceThreshold: 50.0,                    // 50% minimum confidence
 		GridSize:            GridSize{X: 2500, Y: 2500},
 	}
 }

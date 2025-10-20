@@ -481,3 +481,245 @@ func TestContextContains(t *testing.T) {
 		}
 	}
 }
+
+// -------------------------------------------------------------------------
+// Test case (d): Concurrent adds create multiple dots for same value
+// -------------------------------------------------------------------------
+func TestConcurrentAddsMultipleDots(t *testing.T) {
+	// Two replicas concurrently add the same value "x"
+	replicaA := NewAWORSet[string]()
+	replicaB := NewAWORSet[string]()
+
+	// Concurrent adds without observing each other
+	dotA := replicaA.Add("A", "x")
+	dotB := replicaB.Add("B", "x")
+
+	// Verify each has one dot locally
+	if len(replicaA.Core.Entries) != 1 {
+		t.Fatalf("ReplicaA should have 1 entry, got %d", len(replicaA.Core.Entries))
+	}
+	if len(replicaB.Core.Entries) != 1 {
+		t.Fatalf("ReplicaB should have 1 entry, got %d", len(replicaB.Core.Entries))
+	}
+
+	// Exchange deltas: A receives B's delta, B receives A's delta
+	replicaA.MergeDelta(replicaB.Delta)
+	replicaB.MergeDelta(replicaA.Delta)
+
+	// Both should now have 2 dots for the same value "x"
+	if len(replicaA.Core.Entries) != 2 {
+		t.Fatalf("ReplicaA should have 2 entries after merge, got %d", len(replicaA.Core.Entries))
+	}
+	if len(replicaB.Core.Entries) != 2 {
+		t.Fatalf("ReplicaB should have 2 entries after merge, got %d", len(replicaB.Core.Entries))
+	}
+
+	// Verify both dots are present
+	if _, ok := replicaA.Core.Entries[dotA]; !ok {
+		t.Error("ReplicaA should contain dot from A")
+	}
+	if _, ok := replicaA.Core.Entries[dotB]; !ok {
+		t.Error("ReplicaA should contain dot from B")
+	}
+
+	// Semantically, the set contains only one element
+	elemsA := elems(replicaA)
+	if len(elemsA) != 1 {
+		t.Fatalf("ReplicaA should have 1 semantic element, got %d", len(elemsA))
+	}
+	if _, ok := elemsA["x"]; !ok {
+		t.Error("ReplicaA should contain 'x'")
+	}
+
+	// Both replicas converge to the same state
+	elemsB := elems(replicaB)
+	if !equal(elemsA, elemsB) {
+		t.Error("Replicas should converge to the same semantic state")
+	}
+}
+
+// -------------------------------------------------------------------------
+// Test: Remove must iterate all entries to remove all dots for a value
+// -------------------------------------------------------------------------
+func TestRemoveIteratesAllDotsForValue(t *testing.T) {
+	// Create scenario with multiple dots for same value
+	replicaA := NewAWORSet[string]()
+	replicaB := NewAWORSet[string]()
+	replicaC := NewAWORSet[string]()
+
+	// Three replicas concurrently add "x"
+	replicaA.Add("A", "x")
+	replicaB.Add("B", "x")
+	replicaC.Add("C", "x")
+
+	// Merge all deltas into replica A
+	replicaA.MergeDelta(replicaB.Delta)
+	replicaA.MergeDelta(replicaC.Delta)
+
+	// ReplicaA now has 3 dots for "x"
+	if len(replicaA.Core.Entries) != 3 {
+		t.Fatalf("ReplicaA should have 3 entries, got %d", len(replicaA.Core.Entries))
+	}
+
+	// Verify all three values are "x"
+	for _, v := range replicaA.Core.Entries {
+		if v != "x" {
+			t.Errorf("Expected all entries to be 'x', got '%s'", v)
+		}
+	}
+
+	// Remove "x" - must remove all 3 dots
+	replicaA.Remove("x")
+
+	// All entries should be removed
+	if len(replicaA.Core.Entries) != 0 {
+		t.Fatalf("All entries should be removed, got %d remaining", len(replicaA.Core.Entries))
+	}
+
+	// Set should be empty
+	if len(replicaA.Elements()) != 0 {
+		t.Error("Set should be empty after removing all dots for 'x'")
+	}
+}
+
+// -------------------------------------------------------------------------
+// Test: Add-wins with concurrent adds and remove
+// -------------------------------------------------------------------------
+func TestAddWinsWithMultipleConcurrentAdds(t *testing.T) {
+	// Initial state: all replicas have "x"
+	replicaA := NewAWORSet[string]()
+	replicaB := NewAWORSet[string]()
+	replicaC := NewAWORSet[string]()
+
+	// Initial add by A
+	replicaA.Add("A", "x")
+	replicaB.MergeDelta(replicaA.Delta)
+	replicaC.MergeDelta(replicaA.Delta)
+
+	// Clear deltas
+	replicaA.Delta = nil
+	replicaB.Delta = nil
+	replicaC.Delta = nil
+
+	// Concurrent operations:
+	// A removes "x" (knows only about (A,1))
+	replicaA.Remove("x")
+
+	// B and C concurrently add "x" with fresh dots
+	dotB := replicaB.Add("B", "x")
+	dotC := replicaC.Add("C", "x")
+
+	// Exchange all deltas
+	// A receives B's and C's adds
+	replicaA.MergeDelta(replicaB.Delta)
+	replicaA.MergeDelta(replicaC.Delta)
+
+	// B receives A's remove and C's add
+	replicaB.MergeDelta(replicaA.Delta)
+	replicaB.MergeDelta(replicaC.Delta)
+
+	// C receives A's remove and B's add
+	replicaC.MergeDelta(replicaA.Delta)
+	replicaC.MergeDelta(replicaB.Delta)
+
+	// All replicas should converge with "x" present (add wins)
+	elemsA := elems(replicaA)
+	elemsB := elems(replicaB)
+	elemsC := elems(replicaC)
+
+	if _, ok := elemsA["x"]; !ok {
+		t.Error("ReplicaA should contain 'x' (add wins)")
+	}
+	if _, ok := elemsB["x"]; !ok {
+		t.Error("ReplicaB should contain 'x' (add wins)")
+	}
+	if _, ok := elemsC["x"]; !ok {
+		t.Error("ReplicaC should contain 'x' (add wins)")
+	}
+
+	// All should have the same semantic state
+	if !equal(elemsA, elemsB) || !equal(elemsB, elemsC) {
+		t.Error("All replicas should converge to same state")
+	}
+
+	// Should have 2 dots (B's and C's)
+	if len(replicaA.Core.Entries) != 2 {
+		t.Errorf("Should have 2 dots, got %d", len(replicaA.Core.Entries))
+	}
+
+	// Verify specific dots exist
+	if _, ok := replicaA.Core.Entries[dotB]; !ok {
+		t.Error("Should contain dot from B")
+	}
+	if _, ok := replicaA.Core.Entries[dotC]; !ok {
+		t.Error("Should contain dot from C")
+	}
+}
+
+// -------------------------------------------------------------------------
+// Test: Partial remove with concurrent adds
+// -------------------------------------------------------------------------
+func TestPartialRemoveWithConcurrentAdds(t *testing.T) {
+	// Setup: A and B both add "y"
+	replicaA := NewAWORSet[string]()
+	replicaB := NewAWORSet[string]()
+
+	dotA := replicaA.Add("A", "y")
+	dotB := replicaB.Add("B", "y")
+
+	// Both receive each other's adds
+	replicaA.MergeDelta(replicaB.Delta)
+	replicaB.MergeDelta(replicaA.Delta)
+
+	// Now both have 2 dots for "y"
+	if len(replicaA.Core.Entries) != 2 {
+		t.Fatalf("Should have 2 dots, got %d", len(replicaA.Core.Entries))
+	}
+
+	// Clear deltas
+	replicaA.Delta = nil
+	replicaB.Delta = nil
+
+	// A removes "y" (knows about both dots)
+	replicaA.Remove("y")
+
+	// Verify A's remove delta knows about both dots
+	if len(replicaA.Core.Entries) != 0 {
+		t.Error("A should have no entries after remove")
+	}
+
+	// B adds "y" again with a fresh dot (concurrent with A's remove)
+	dotB2 := replicaB.Add("B", "y")
+
+	// Exchange deltas
+	replicaA.MergeDelta(replicaB.Delta)
+	replicaB.MergeDelta(replicaA.Delta)
+
+	// Both should converge with "y" present (the new add from B)
+	elemsA := elems(replicaA)
+	elemsB := elems(replicaB)
+
+	if !equal(elemsA, elemsB) {
+		t.Error("Replicas should converge")
+	}
+
+	if _, ok := elemsA["y"]; !ok {
+		t.Error("Should contain 'y' (new add wins)")
+	}
+
+	// Should only have the new dot from B
+	if len(replicaA.Core.Entries) != 1 {
+		t.Errorf("Should have 1 dot (the new one), got %d", len(replicaA.Core.Entries))
+	}
+
+	// Verify it's the new dot, not the old ones
+	if _, ok := replicaA.Core.Entries[dotB2]; !ok {
+		t.Error("Should contain the new dot from B")
+	}
+	if _, ok := replicaA.Core.Entries[dotA]; ok {
+		t.Error("Should not contain the old dot from A")
+	}
+	if _, ok := replicaA.Core.Entries[dotB]; ok {
+		t.Error("Should not contain the old dot from B")
+	}
+}

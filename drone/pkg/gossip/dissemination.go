@@ -2,12 +2,12 @@ package gossip
 
 import (
 	"log"
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/heitortanoue/tcc/pkg/crdt"
+	"github.com/heitortanoue/tcc/pkg/network"
 	"github.com/heitortanoue/tcc/pkg/state"
 )
 
@@ -35,9 +35,6 @@ type DisseminationSystem struct {
 	tcpSender      TCPSender
 	cache          *DeduplicationCache
 
-	// Neighbor tracking for prioritization
-	neighborTracker *NeighborTracker
-
 	// Execution control
 	running bool
 	stopCh  chan struct{}
@@ -50,71 +47,17 @@ type DisseminationSystem struct {
 	antiEntropyCount int64
 }
 
-// NeighborTracker tracks last sent time to each neighbor
-type NeighborTracker struct {
-	lastSent map[string]time.Time
-	mutex    sync.RWMutex
-}
-
 // NeighborGetter interface to obtain neighbors
 type NeighborGetter interface {
 	GetNeighborURLs() []string
+	GetPrioritizedNeighborURLs(count int) []*network.Neighbor
+	RecordSent(neighborID string)
 	Count() int
 }
 
 // TCPSender interface for TCP sending
 type TCPSender interface {
 	SendDelta(url string, delta DeltaMsg) error
-}
-
-// NewNeighborTracker creates a new neighbor tracker
-func NewNeighborTracker() *NeighborTracker {
-	return &NeighborTracker{
-		lastSent: make(map[string]time.Time),
-	}
-}
-
-// RecordSent records that a message was sent to a neighbor
-func (nt *NeighborTracker) RecordSent(neighbor string) {
-	nt.mutex.Lock()
-	defer nt.mutex.Unlock()
-	nt.lastSent[neighbor] = time.Now()
-}
-
-// PrioritizeNeighbors returns neighbors sorted by least recently sent
-func (nt *NeighborTracker) PrioritizeNeighbors(neighbors []string, count int) []string {
-	nt.mutex.RLock()
-	defer nt.mutex.RUnlock()
-
-	type neighborInfo struct {
-		url      string
-		lastSent time.Time
-	}
-
-	// Build list with last sent times
-	nlist := make([]neighborInfo, 0, len(neighbors))
-	for _, n := range neighbors {
-		nlist = append(nlist, neighborInfo{
-			url:      n,
-			lastSent: nt.lastSent[n],
-		})
-	}
-
-	// Sort by oldest first (never sent = zero time = highest priority)
-	for i := 0; i < len(nlist)-1; i++ {
-		for j := i + 1; j < len(nlist); j++ {
-			if nlist[i].lastSent.After(nlist[j].lastSent) {
-				nlist[i], nlist[j] = nlist[j], nlist[i]
-			}
-		}
-	}
-
-	// Return up to 'count' neighbors
-	result := make([]string, 0, count)
-	for i := 0; i < count && i < len(nlist); i++ {
-		result = append(result, nlist[i].url)
-	}
-	return result
 }
 
 // NewDisseminationSystem creates a new dissemination system
@@ -128,7 +71,6 @@ func NewDisseminationSystem(droneID string, fanout, defaultTTL int, deltaPushInt
 		neighborGetter:      neighborGetter,
 		tcpSender:           tcpSender,
 		cache:               NewDeduplicationCache(10000), // Cache of 10k IDs
-		neighborTracker:     NewNeighborTracker(),
 		running:             false,
 		stopCh:              make(chan struct{}),
 	}
@@ -243,20 +185,21 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 	}
 
 	// Prioritize neighbors that haven't received messages recently
-	targets := ds.neighborTracker.PrioritizeNeighbors(neighbors, targetCount)
+	targets := ds.neighborGetter.GetPrioritizedNeighborURLs(targetCount)
 
 	var errors []error
 	successCount := 0
 
-	for _, url := range targets {
+	for _, neighbor := range targets {
+		url := neighbor.GetURL()
 		if err := ds.tcpSender.SendDelta(url, msg); err != nil {
 			log.Printf("[DISSEMINATION] Error sending delta %s to %s: %v",
 				msg.ID.String()[:8], url, err)
 			errors = append(errors, err)
 		} else {
 			successCount++
-			// Record successful send
-			ds.neighborTracker.RecordSent(url)
+			// Record successful send using neighbor ID
+			ds.neighborGetter.RecordSent(neighbor.ID)
 		}
 	}
 
@@ -272,25 +215,6 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 	}
 
 	return nil
-}
-
-// selectRandomNeighbors selects up to 'count' neighbors randomly
-func selectRandomNeighbors(neighbors []string, count int) []string {
-	if len(neighbors) <= count {
-		return neighbors
-	}
-
-	// Copy to avoid modifying original
-	shuffled := make([]string, len(neighbors))
-	copy(shuffled, neighbors)
-
-	// Fisher-Yates shuffle
-	for i := len(shuffled) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
-		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-	}
-
-	return shuffled[:count]
 }
 
 // startHeartbeat periodically triggers sending of local delta
@@ -329,8 +253,9 @@ func (ds *DisseminationSystem) startAntiEntropyLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			neighbors := ds.neighborGetter.GetNeighborURLs()
-			if len(neighbors) == 0 {
+			// Get one random neighbor using prioritized method
+			targets := ds.neighborGetter.GetPrioritizedNeighborURLs(1)
+			if len(targets) == 0 {
 				continue
 			}
 
@@ -341,8 +266,9 @@ func (ds *DisseminationSystem) startAntiEntropyLoop() {
 				continue
 			}
 
-			// Select one random neighbor for full state sync
-			target := neighbors[rand.Intn(len(neighbors))]
+			// Use the first (and only) neighbor from prioritized list
+			neighbor := targets[0]
+			targetURL := neighbor.GetURL()
 
 			// Create anti-entropy message (max TTL to ensure delivery)
 			msg := DeltaMsg{
@@ -354,16 +280,16 @@ func (ds *DisseminationSystem) startAntiEntropyLoop() {
 			}
 
 			log.Printf("[ANTI-ENTROPY] Sending full state (%d entries) to %s",
-				len(fullState.Entries), target)
+				len(fullState.Entries), targetURL)
 
-			if err := ds.tcpSender.SendDelta(target, msg); err != nil {
-				log.Printf("[ANTI-ENTROPY] Error sending to %s: %v", target, err)
+			if err := ds.tcpSender.SendDelta(targetURL, msg); err != nil {
+				log.Printf("[ANTI-ENTROPY] Error sending to %s: %v", targetURL, err)
 			} else {
 				ds.mutex.Lock()
 				ds.antiEntropyCount++
 				ds.mutex.Unlock()
-				ds.neighborTracker.RecordSent(target)
-				log.Printf("[ANTI-ENTROPY] Full state synced to %s", target)
+				ds.neighborGetter.RecordSent(neighbor.ID)
+				log.Printf("[ANTI-ENTROPY] Full state synced to %s", targetURL)
 			}
 
 		case <-ds.stopCh:

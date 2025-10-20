@@ -190,7 +190,7 @@ func NewAWORSet[E comparable]() *AWORSet[E] {
 
 // Add inserts v and records the operation in Delta.
 // Following the reference implementation: optimization that first deletes val
-func (s *AWORSet[E]) Add(nodeID string, v E) {
+func (s *AWORSet[E]) Add(nodeID string, v E) Dot {
 	if s.Delta == nil {
 		s.Delta = NewDotKernel[E]()
 	}
@@ -217,9 +217,13 @@ func (s *AWORSet[E]) Add(nodeID string, v E) {
 	// Compact contexts to avoid unbounded cloud growth
 	s.Core.Context.compact()
 	s.Delta.Context.compact()
+
+	return d
 }
 
 // Remove deletes all occurrences of v and marks removals in both contexts.
+// Note: This operation is O(n) where n is the number of entries because
+// a value can exist under multiple dots (from concurrent adds).
 func (s *AWORSet[E]) Remove(v E) {
 	if s.Delta == nil {
 		s.Delta = NewDotKernel[E]()

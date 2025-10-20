@@ -17,29 +17,31 @@ type FireReading struct {
 
 // FireSensor represents a simple fire sensor that collects readings
 type FireSensor struct {
-	readings  []FireReading
-	generator *FireSensorGenerator
-	sensorID  string
-	mutex     sync.RWMutex
-	posX      int
-	posY      int
-	posMutex  sync.RWMutex
-	gridSizeX int
-	gridSizeY int
+	readings            []FireReading
+	generator           *FireSensorGenerator
+	sensorID            string
+	mutex               sync.RWMutex
+	posX                int
+	posY                int
+	posMutex            sync.RWMutex
+	gridSizeX           int
+	gridSizeY           int
+	confidenceThreshold float64
 }
 
 // NewFireSensor creates a new fire sensor instance
-func NewFireSensor(sensorID string, sampleInterval time.Duration, gridSizeX, gridSizeY int) *FireSensor {
+func NewFireSensor(sensorID string, sampleInterval time.Duration, gridSizeX, gridSizeY int, confidenceThreshold float64) *FireSensor {
 	sensor := &FireSensor{
-		readings:  make([]FireReading, 0),
-		sensorID:  sensorID,
-		posX:      gridSizeX / 2,
-		posY:      gridSizeY / 2,
-		gridSizeX: gridSizeX,
-		gridSizeY: gridSizeY,
+		readings:            make([]FireReading, 0),
+		sensorID:            sensorID,
+		posX:                gridSizeX / 2,
+		posY:                gridSizeY / 2,
+		gridSizeX:           gridSizeX,
+		gridSizeY:           gridSizeY,
+		confidenceThreshold: confidenceThreshold,
 	}
 
-	generator := NewFireSensorGenerator(sensorID, sampleInterval, gridSizeX, gridSizeY)
+	generator := NewFireSensorGenerator(sensorID, sampleInterval, gridSizeX, gridSizeY, confidenceThreshold)
 	generator.SetSensor(sensor)
 	sensor.generator = generator
 

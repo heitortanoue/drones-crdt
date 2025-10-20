@@ -7,7 +7,8 @@ import (
 
 func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 	gridSize := 1000
-	sensor := NewFireSensor("test-sensor", 100*time.Millisecond, gridSize, gridSize)
+	confidenceThreshold := 0.0
+	sensor := NewFireSensor("test-sensor", 100*time.Millisecond, gridSize, gridSize, confidenceThreshold)
 
 	if sensor.generator.running {
 		t.Error("Generator should not be running initially")
@@ -26,7 +27,7 @@ func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 	}
 
 	// Wait for a few generations
-	time.Sleep(350 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// Stop the generator
 	sensor.Stop()
@@ -58,7 +59,8 @@ func TestFireSensorGenerator_BasicFunctionality(t *testing.T) {
 
 func TestFireSensor_ManualReadings(t *testing.T) {
 	gridSize := 1000
-	sensor := NewFireSensor("manual-test-sensor", time.Hour, gridSize, gridSize)
+	confidenceThreshold := 50.0
+	sensor := NewFireSensor("manual-test-sensor", time.Hour, gridSize, gridSize, confidenceThreshold)
 
 	sensor.AddManualReading(15, 25, 85.5)
 
@@ -81,7 +83,8 @@ func TestFireSensor_ManualReadings(t *testing.T) {
 
 func TestFireSensor_GetAndClearReadings(t *testing.T) {
 	gridSize := 1000
-	sensor := NewFireSensor("clear-test-sensor", time.Hour, gridSize, gridSize)
+	confidenceThreshold := 50.0
+	sensor := NewFireSensor("clear-test-sensor", time.Hour, gridSize, gridSize, confidenceThreshold)
 
 	sensor.AddManualReading(10, 20, 75.0)
 	sensor.AddManualReading(15, 25, 80.0)

@@ -25,16 +25,19 @@ var startTime = time.Now() // For uptime calculation
 func main() {
 	// Command line flags
 	var (
-		droneID        = flag.String("id", "drone-1", "Unique ID of this drone")
-		sampleSec      = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
-		fanout         = flag.Int("fanout", 3, "Number of neighbors for gossip")
-		ttl            = flag.Int("ttl", 4, "Initial TTL for gossip messages")
-		deltaPushSec   = flag.Int("delta-push-sec", 5, "Delta push interval in seconds")
-		antiEntropySec = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds")
-		udpPort        = flag.Int("udp-port", 7000, "UDP port for control")
-		tcpPort        = flag.Int("tcp-port", 8080, "TCP port for data")
-		bindAddr       = flag.String("bind", "0.0.0.0", "Bind address")
-		showUsage      = flag.Bool("help", false, "Show usage help")
+		droneID             = flag.String("id", "drone-1", "Unique ID of this drone")
+		sampleSec           = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
+		fanout              = flag.Int("fanout", 3, "Number of neighbors for gossip")
+		ttl                 = flag.Int("ttl", 4, "Initial TTL for gossip messages")
+		deltaPushSec        = flag.Int("delta-push-sec", 5, "Delta push interval in seconds")
+		antiEntropySec      = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds")
+		udpPort             = flag.Int("udp-port", 7000, "UDP port for control")
+		tcpPort             = flag.Int("tcp-port", 8080, "TCP port for data")
+		bindAddr            = flag.String("bind", "0.0.0.0", "Bind address")
+		helloMs             = flag.Int("hello-ms", 1000, "Hello message base interval in milliseconds")
+		helloJitterMs       = flag.Int("hello-jitter-ms", 200, "Hello message jitter in milliseconds")
+		confidenceThreshold = flag.Float64("confidence-threshold", 50.0, "Minimum confidence threshold (0-100)")
+		showUsage           = flag.Bool("help", false, "Show usage help")
 	)
 	flag.Parse()
 
@@ -54,19 +57,22 @@ func main() {
 	cfg.UDPPort = *udpPort
 	cfg.TCPPort = *tcpPort
 	cfg.BindAddr = *bindAddr
+	cfg.HelloInterval = time.Duration(*helloMs) * time.Millisecond
+	cfg.HelloJitter = time.Duration(*helloJitterMs) * time.Millisecond
+	cfg.ConfidenceThreshold = *confidenceThreshold
 
 	// Neighbor table
 	neighborTable := network.NewNeighborTable(cfg.NeighborTimeout)
 
 	state.InitGlobalState(cfg.DroneID)
 
-	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval, cfg.GridSize.X, cfg.GridSize.Y)
+	sensorAPI := sensor.NewFireSensor(cfg.DroneID, cfg.SampleInterval, cfg.GridSize.X, cfg.GridSize.Y, cfg.ConfidenceThreshold)
 
 	udpServer := network.NewUDPServer(cfg.DroneID, cfg.UDPPort, neighborTable)
 	tcpServer := network.NewTCPServer(cfg.DroneID, cfg.TCPPort)
 
 	// Control system
-	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer)
+	controlSystem := protocol.NewControlSystem(cfg.DroneID, sensorAPI, udpServer, cfg.HelloInterval, cfg.HelloJitter)
 
 	// Dissemination system with TTL gossip
 	tcpSender := gossip.NewHTTPTCPSender(5 * time.Second)
@@ -184,7 +190,7 @@ func createSensorHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Dis
 		}
 
 		cell := crdt.Cell{X: reading.X, Y: reading.Y}
-		meta := crdt.FireMeta{Timestamp: reading.Timestamp, Confidence: reading.Confidence}
+		meta := crdt.FireMeta{Timestamp: reading.Timestamp, Confidence: reading.Confidence, DetectedBy: "manual"}
 
 		state.AddFire(cell, meta)
 

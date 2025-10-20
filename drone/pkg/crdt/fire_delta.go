@@ -6,6 +6,7 @@ type Cell struct {
 }
 
 type FireMeta struct {
+	DetectedBy string  `json:"detected_by"`
 	Timestamp  int64   `json:"timestamp"`
 	Confidence float64 `json:"confidence"`
 }

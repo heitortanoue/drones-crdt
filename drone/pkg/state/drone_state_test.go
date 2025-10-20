@@ -26,8 +26,12 @@ func TestDroneStateBasic(t *testing.T) {
 		t.Errorf("Expected 1 fire, found %d", len(fires))
 	}
 
-	if fires[0] != cell {
-		t.Errorf("Cell mismatch: expected %+v, found %+v", cell, fires[0])
+	if fires[0].Cell != cell {
+		t.Errorf("Cell mismatch: expected %+v, found %+v", cell, fires[0].Cell)
+	}
+
+	if fires[0].Meta != meta {
+		t.Errorf("Meta mismatch: expected %+v, found %+v", meta, fires[0].Meta)
 	}
 
 	// Verify metadata
@@ -74,9 +78,9 @@ func TestMergeDelta(t *testing.T) {
 	}
 
 	expectedCell := crdt.Cell{X: 15, Y: 25}
-	if fires[0] != expectedCell {
+	if fires[0].Cell != expectedCell {
 		t.Errorf("Delta cell mismatch: expected %+v, found %+v",
-			expectedCell, fires[0])
+			expectedCell, fires[0].Cell)
 	}
 }
 
@@ -97,6 +101,14 @@ func TestGlobalState(t *testing.T) {
 	fires := GetActiveFires()
 	if len(fires) != 1 {
 		t.Errorf("Expected 1 fire in global state, found %d", len(fires))
+	}
+
+	// Verify the fire has correct cell and metadata
+	if fires[0].Cell != cell {
+		t.Errorf("Expected cell %+v, got %+v", cell, fires[0].Cell)
+	}
+	if fires[0].Meta.Confidence != 0.7 {
+		t.Errorf("Expected confidence 0.7, got %f", fires[0].Meta.Confidence)
 	}
 
 	// Verify statistics

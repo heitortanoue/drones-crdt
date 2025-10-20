@@ -39,24 +39,13 @@ func (ds *DroneState) AddFire(cell crdt.Cell, meta crdt.FireMeta) {
 	// - First removes old occurrences of the cell
 	// - Then adds with a new dot
 	// - Updates both Core and Delta contexts
-	ds.fires.Add(ds.droneID, cell)
-
-	// Find the newly added dot to store metadata
-	var newDot crdt.Dot
-	for dot, c := range ds.fires.Core.Entries {
-		if c == cell && dot.NodeID == ds.droneID {
-			// This is the most recent dot for this cell from this drone
-			if dot.Counter > newDot.Counter {
-				newDot = dot
-			}
-		}
-	}
+	addedDot := ds.fires.Add(ds.droneID, cell)
 
 	// Store metadata for the new dot
-	ds.metadata[newDot] = meta
+	ds.metadata[addedDot] = meta
 
 	log.Printf("[STATE] Fire detection added at (%d, %d) with dot %s",
-		cell.X, cell.Y, newDot.String()[:8])
+		cell.X, cell.Y, addedDot.String()[:8])
 }
 
 // RemoveFire removes a cell from the state (when fire is extinguished)
@@ -163,12 +152,34 @@ func (ds *DroneState) ClearDelta() {
 	ds.fires.Delta = nil
 }
 
-// GetActiveFires returns all active cells with fire
-func (ds *DroneState) GetActiveFires() []crdt.Cell {
+// FireWithMeta combines a cell with its metadata
+type FireWithMeta struct {
+	Cell crdt.Cell     `json:"cell"`
+	Meta crdt.FireMeta `json:"meta"`
+}
+
+// GetActiveFires returns all active cells with fire and their metadata
+func (ds *DroneState) GetActiveFires() []FireWithMeta {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
 
-	return ds.fires.Elements()
+	result := make([]FireWithMeta, 0, len(ds.fires.Core.Entries))
+
+	for dot, cell := range ds.fires.Core.Entries {
+		meta, exists := ds.metadata[dot]
+		// If metadata is missing, throw error log and skip
+		if !exists {
+			log.Printf("[STATE] Warning: missing metadata for dot %s", dot.String()[:8])
+			continue
+		}
+
+		result = append(result, FireWithMeta{
+			Cell: cell,
+			Meta: meta,
+		})
+	}
+
+	return result
 }
 
 // GetLatestReadings returns the most recent fire metadata grouped by NodeID

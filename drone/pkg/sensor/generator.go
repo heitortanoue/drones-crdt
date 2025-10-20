@@ -10,24 +10,26 @@ import (
 )
 
 type FireSensorGenerator struct {
-	sensorID  string
-	sensor    *FireSensor
-	interval  time.Duration
-	running   bool
-	stopCh    chan struct{}
-	gridSizeX int
-	gridSizeY int
+	sensorID            string
+	sensor              *FireSensor
+	interval            time.Duration
+	running             bool
+	stopCh              chan struct{}
+	gridSizeX           int
+	gridSizeY           int
+	confidenceThreshold float64
 }
 
 // NewFireSensorGenerator creates a new fire detection generator
-func NewFireSensorGenerator(sensorID string, interval time.Duration, gridSizeX, gridSizeY int) *FireSensorGenerator {
+func NewFireSensorGenerator(sensorID string, interval time.Duration, gridSizeX, gridSizeY int, confidenceThreshold float64) *FireSensorGenerator {
 	return &FireSensorGenerator{
-		sensorID:  sensorID,
-		interval:  interval,
-		running:   false,
-		stopCh:    make(chan struct{}),
-		gridSizeX: gridSizeX,
-		gridSizeY: gridSizeY,
+		sensorID:            sensorID,
+		interval:            interval,
+		running:             false,
+		stopCh:              make(chan struct{}),
+		gridSizeX:           gridSizeX,
+		gridSizeY:           gridSizeY,
+		confidenceThreshold: confidenceThreshold,
 	}
 }
 
@@ -112,25 +114,21 @@ func (fsg *FireSensorGenerator) generateDetection() {
 
 	cell := crdt.Cell{X: x, Y: y}
 
-	var confidence float64
-	if rand.Float64() < 0.1 {
-		confidence = 70.0 + rand.Float64()*30.0
-	} else {
-		confidence = 10.0 + rand.Float64()*40.0
-	}
+	// Simple uniform distribution: 0-100%
+	confidence := rand.Float64() * 100.0
 
-	if confidence < 50.0 {
+	if confidence < fsg.confidenceThreshold {
 		// Low confidence - ignore
-		log.Printf("[GENERATOR] %s IGNORE: (%d,%d) confidence=%.1f%% (below threshold)",
-			fsg.sensorID, x, y, confidence)
+		log.Printf("[GENERATOR] %s IGNORE: (%d,%d) confidence=%.1f%% (below threshold %.1f%%)",
+			fsg.sensorID, x, y, confidence, fsg.confidenceThreshold)
 		return
 	}
 
 	// Check if fire already exists in state
 	activeFires := state.GetActiveFires()
 	fireExists := false
-	for _, activeCell := range activeFires {
-		if activeCell.X == cell.X && activeCell.Y == cell.Y {
+	for _, fire := range activeFires {
+		if fire.Cell.X == cell.X && fire.Cell.Y == cell.Y {
 			fireExists = true
 			break
 		}
@@ -157,6 +155,7 @@ func (fsg *FireSensorGenerator) generateDetection() {
 	meta := crdt.FireMeta{
 		Timestamp:  reading.Timestamp,
 		Confidence: reading.Confidence,
+		DetectedBy: fsg.sensorID,
 	}
 
 	state.AddFire(cell, meta)
@@ -169,9 +168,10 @@ func (fsg *FireSensorGenerator) generateDetection() {
 func (fsg *FireSensorGenerator) GetStats() map[string]interface{} {
 
 	return map[string]interface{}{
-		"sensor_id":    fsg.sensorID,
-		"running":      fsg.running,
-		"interval_sec": fsg.interval.Seconds(),
-		"grid_size":    map[string]int{"x": fsg.gridSizeX, "y": fsg.gridSizeY},
+		"sensor_id":            fsg.sensorID,
+		"running":              fsg.running,
+		"interval_sec":         fsg.interval.Seconds(),
+		"confidence_threshold": fsg.confidenceThreshold,
+		"grid_size":            map[string]int{"x": fsg.gridSizeX, "y": fsg.gridSizeY},
 	}
 }
