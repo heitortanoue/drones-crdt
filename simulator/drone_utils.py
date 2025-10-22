@@ -130,15 +130,13 @@ def fetch_state(drone):
         if not all_deltas:
             return None, None, []
 
-        # Extract latest readings to get timestamp and confidence
-        latest_readings = data.get("latest_readings", {})
-        if not latest_readings:
-            return None, None, all_deltas
+        # With the new format, all_deltas is an array of FireWithMeta objects
+        # Each object has: {cell: {x, y}, meta: {detected_by, timestamp, confidence}}
 
-        # Get the first reading from latest_readings
-        reading_data = list(latest_readings.values())[0]
-        timestamp_ms = reading_data["timestamp"]
-        confidence = reading_data["confidence"]
+        # Get timestamp and confidence from the first fire's metadata
+        first_fire = all_deltas[0]
+        timestamp_ms = first_fire["meta"]["timestamp"]
+        confidence = first_fire["meta"]["confidence"]
 
         return timestamp_ms, confidence, all_deltas
 
@@ -146,6 +144,10 @@ def fetch_state(drone):
         # Handle cases where the response is not valid JSON
         info(f"-> ERROR for {drone.name}: Could not parse JSON response <-\n")
         info(f"   Problematic response: {response_str}\n")
+        return None, None, []
+    except (KeyError, IndexError) as e:
+        # Handle cases where the expected structure is not present
+        info(f"-> ERROR for {drone.name}: Unexpected data structure <-\n")
         return None, None, []
 
 
@@ -165,9 +167,11 @@ def fetch_states(drones, stop_event, csv_writers):
             timestamp_ms, confidence, all_deltas = fetch_state(drone)
             if timestamp_ms is None:
                 continue
-            for delta in all_deltas:
-                # For convergence, compare only cell positions (not metadata)
-                cell_key = json.dumps(delta["cell"], sort_keys=True)
+            # Each delta is now a FireWithMeta object with cell and meta
+            # For comparison, we use the cell coordinates (x, y) as the key
+            for fire_with_meta in all_deltas:
+                cell = fire_with_meta["cell"]
+                cell_key = f"{cell['x']},{cell['y']}"
                 drone_delta_sets[i].add(cell_key)
 
             # Format the timestamp from milliseconds to a readable string
