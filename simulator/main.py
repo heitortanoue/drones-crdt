@@ -26,12 +26,13 @@ def main():
         os.system(f'sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null')
     except:
         pass
-    
+
     setLogLevel('info')
-    
+
     net, drones = setup_topology()
-    net.telemetry(nodes=drones, single=True, data_type='tx_bytes', title="FANET TX BYTES")
-    
+    # net.telemetry(nodes=drones, single=True, data_type='tx_bytes', title="FANET TX BYTES")
+    net.plotGraph()
+
     info("*** Building the network ***\n")
     net.build()
     net.start()
@@ -53,7 +54,7 @@ def main():
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
     csv_files = {}
     csv_writers = {}
-    
+
     # Use a try...finally block to ensure files are always closed properly.
     try:
         for drone in drones:
@@ -70,7 +71,7 @@ def main():
                 'repetition',
                 'convergence']
             )
-            
+
             csv_files[drone.name] = file_handle
             csv_writers[drone.name] = writer
             info(f"Opened {filename} for data logging.\n")
@@ -84,7 +85,7 @@ def main():
 
         send_thread = threading.Thread(target=send_locations, args=(drones, stop_event), daemon=True)
         send_thread.start()
-        
+
         running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
         running_ui_thread.start()
 

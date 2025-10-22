@@ -2,24 +2,23 @@ import json
 from datetime import datetime
 from typing import List, Set
 
-from mininet.log import info
-from mn_wifi.link import adhoc, wmediumd
-from mn_wifi.net import Mininet_wifi
-from mn_wifi.wmediumdConnector import interference
-
 from config import (
     ATTENUATION,
     DRONE_HEIGHT,
     DRONE_NAMES,
     DRONE_RANGE,
-    PROPAGATION_MODEL,
     MOBILITY_MODEL,
+    PROPAGATION_MODEL,
     SPEED,
     TCP_PORT,
     X_MAX,
     Y_MAX,
     duration,
 )
+from mininet.log import info
+from mn_wifi.link import adhoc, wmediumd
+from mn_wifi.net import Mininet_wifi
+from mn_wifi.wmediumdConnector import interference
 
 
 def setup_topology():
@@ -27,25 +26,28 @@ def setup_topology():
     info("--- Creating a Go drone network with Mininet-WiFi ---\n")
     drones = []
     net = Mininet_wifi(link=wmediumd, wmediumd_mode=interference)
-    net.addController('c0')
+    net.addController("c0")
 
     info("*** Creating drone nodes ***\n")
     kwargs = {}
-    kwargs['height'] = DRONE_HEIGHT
+    kwargs["height"] = DRONE_HEIGHT
     for i, name in enumerate(DRONE_NAMES, 1):
         # Generate MAC address properly for any number of drones
-        mac = f'00:00:00:00:{(i >> 8):02x}:{(i & 0xff):02x}'
+        mac = f"00:00:00:00:{(i >> 8):02x}:{(i & 0xff):02x}"
         # Generate IP address for up to 65534 drones (255.254 in class A network)
-        ip = f'10.{(i >> 8) & 0xff}.{i & 0xff}.0/8'
+        ip = f"10.{(i >> 8) & 0xff}.{i & 0xff}.0/8"
 
         drone = net.addStation(
             name,
             mac=mac,
             ip=ip,
             range=DRONE_RANGE,
-            min_x=0, max_x=X_MAX,
-            min_y=0, max_y=Y_MAX,
-            min_v=0.8 * SPEED, max_v=SPEED,
+            min_x=0,
+            max_x=X_MAX,
+            min_y=0,
+            max_y=Y_MAX,
+            min_v=0.8 * SPEED,
+            max_v=SPEED,
             **kwargs,
         )
         drones.append(drone)
@@ -55,28 +57,23 @@ def setup_topology():
 
     info("*** Configuring network nodes ***\n")
     net.configureNodes()
-    #net.plotGraph()
+    # net.plotGraph()
     net.plotEnergyMonitor(nodes=drones, single=True, title="FANET Energy Consumption")
     net.setMobilityModel(
-        time=0,
-        model=MOBILITY_MODEL,
-        max_x=X_MAX,
-        max_y=Y_MAX,
-        velocity=SPEED,
-        seed=20
+        time=0, model=MOBILITY_MODEL, max_x=X_MAX, max_y=Y_MAX, velocity=SPEED, seed=20
     )
 
     info("*** Adding ad-hoc links to drones ***\n")
-    kwargs['proto'] = 'batman_adv'
+    kwargs["proto"] = "batman_adv"
     for drone in drones:
         net.addLink(
             drone,
             cls=adhoc,
-            intf=f'{drone.name}-wlan0',
-            ssid='adhocNet',
-            mode='g',
+            intf=f"{drone.name}-wlan0",
+            ssid="adhocNet",
+            mode="g",
             channel=5,
-            ht_cap='HT40+',
+            ht_cap="HT40+",
             **kwargs,
         )
 
@@ -103,11 +100,11 @@ def send_locations(drones, stop_event):
 
 
 def fetch_stats(drone):
-    command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats'
+    command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats"
     try:
         response_str = drone.cmd(command).strip()
     except Exception as e:
-        info(f'-> ERROR for {drone.name}: Could not fetch stats. Try again <-\n')
+        info(f"-> ERROR for {drone.name}: Could not fetch stats. Try again <-\n")
         return None
 
     ## Parse the JSON response and log the specific fields.
@@ -117,32 +114,32 @@ def fetch_stats(drone):
 
     except json.JSONDecodeError as e:
         # Handle cases where the response is not valid JSON
-        info(f'-> ERROR for {drone.name}: Could not parse JSON response <-\n')
-        info(f'   Problematic response: {response_str}\n')
+        info(f"-> ERROR for {drone.name}: Could not parse JSON response <-\n")
+        info(f"   Problematic response: {response_str}\n")
 
 
 def fetch_state(drone):
-    command = f'curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state'
+    command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state"
     response_str = drone.cmd(command).strip()
 
     ## Parse the JSON response and log the specific fields.
     try:
         data = json.loads(response_str)
-        all_deltas = data['all_deltas']
-        
+        all_deltas = data["all_deltas"]
+
         if not all_deltas:
             return None, None, []
-        
+
         # Extract latest readings to get timestamp and confidence
-        latest_readings = data.get('latest_readings', {})
+        latest_readings = data.get("latest_readings", {})
         if not latest_readings:
             return None, None, all_deltas
-        
+
         # Get the first reading from latest_readings
         reading_data = list(latest_readings.values())[0]
-        timestamp_ms = reading_data['timestamp']
-        confidence = reading_data['confidence']
-        
+        timestamp_ms = reading_data["timestamp"]
+        confidence = reading_data["confidence"]
+
         return timestamp_ms, confidence, all_deltas
 
     except json.JSONDecodeError as e:
@@ -170,7 +167,7 @@ def fetch_states(drones, stop_event, csv_writers):
                 continue
             for delta in all_deltas:
                 # For convergence, compare only cell positions (not metadata)
-                cell_key = json.dumps(delta['cell'], sort_keys=True)
+                cell_key = json.dumps(delta["cell"], sort_keys=True)
                 drone_delta_sets[i].add(cell_key)
 
             # Format the timestamp from milliseconds to a readable string
