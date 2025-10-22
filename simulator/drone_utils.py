@@ -128,21 +128,28 @@ def fetch_state(drone):
     ## Parse the JSON response and log the specific fields.
     try:
         data = json.loads(response_str)
-        # Extract data, assuming the first entry in latest_readings is the relevant one
-        reading_data = list(data['latest_readings'].values())
-        if reading_data == []:
+        all_deltas = data['all_deltas']
+        
+        if not all_deltas:
             return None, None, []
         
-        reading_data = reading_data[0]
+        # Extract latest readings to get timestamp and confidence
+        latest_readings = data.get('latest_readings', {})
+        if not latest_readings:
+            return None, None, all_deltas
+        
+        # Get the first reading from latest_readings
+        reading_data = list(latest_readings.values())[0]
         timestamp_ms = reading_data['timestamp']
         confidence = reading_data['confidence']
-        all_deltas = data['all_deltas']
+        
         return timestamp_ms, confidence, all_deltas
 
     except json.JSONDecodeError as e:
         # Handle cases where the response is not valid JSON
         info(f"-> ERROR for {drone.name}: Could not parse JSON response <-\n")
         info(f"   Problematic response: {response_str}\n")
+        return None, None, []
 
 
 def fetch_states(drones, stop_event, csv_writers):
@@ -162,7 +169,9 @@ def fetch_states(drones, stop_event, csv_writers):
             if timestamp_ms is None:
                 continue
             for delta in all_deltas:
-                drone_delta_sets[i].add(json.dumps(delta))
+                # For convergence, compare only cell positions (not metadata)
+                cell_key = json.dumps(delta['cell'], sort_keys=True)
+                drone_delta_sets[i].add(cell_key)
 
             # Format the timestamp from milliseconds to a readable string
             formatted_timestamp = datetime.fromtimestamp(
