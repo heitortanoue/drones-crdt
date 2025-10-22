@@ -5,6 +5,12 @@ import time
 from mininet.log import setLogLevel, info
 from mn_wifi.cli import CLI
 
+from telemetry import (
+    run_plot_graph,
+    run_energy_monitor,
+    run_tx_bytes_telemetry,
+    run_tx_dropped_telemetry,
+)
 from drone_utils import setup_topology, fetch_states, send_locations
 from drone_ui import setup_UI
 from config import (
@@ -30,7 +36,6 @@ def main():
     setLogLevel('info')
     
     net, drones = setup_topology()
-    net.telemetry(nodes=drones, single=True, data_type='tx_bytes', title="FANET TX BYTES")
     
     info("*** Building the network ***\n")
     net.build()
@@ -87,6 +92,11 @@ def main():
         
         running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
         running_ui_thread.start()
+
+        threading.Thread(target=run_plot_graph, args=(net,), daemon=True).start()
+        threading.Thread(target=run_energy_monitor, args=(net, drones), daemon=True).start()
+        threading.Thread(target=run_tx_bytes_telemetry, args=(net, drones), daemon=True).start()
+        #threading.Thread(target=run_tx_dropped_telemetry, args=(net, drones), daemon=True).start()
 
         info("\n*** Simulation is running. CSV data is being saved in 'drone_execution_data'. ***\n")
         info("*** Type 'exit' or Ctrl+D in the CLI to quit. ***\n")
