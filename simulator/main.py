@@ -1,33 +1,39 @@
+import csv
 import os
 import threading
-import csv
 import time
-from mininet.log import setLogLevel, info
-from mn_wifi.cli import CLI
 
-from drone_utils import setup_topology, fetch_states, send_locations
-from drone_ui import setup_UI
 from config import (
+    BIND_ADDR,
     EXEC_PATH,
+    FANOUT,
+    OUTPUT_DIR,
     TCP_PORT,
     UDP_PORT,
-    OUTPUT_DIR,
-    BIND_ADDR,
-    FANOUT,
-    duration,
-    delta_push_interval,
     anti_entropy_interval,
-    ttl
+    confidence_threshold,
+    delta_push_interval,
+    duration,
+    hello_interval_ms,
+    hello_jitter_ms,
+    neighbor_timeout_sec,
+    sample_interval_sec,
+    ttl,
 )
+from drone_ui import setup_UI
+from drone_utils import fetch_states, send_locations, setup_topology
+from mininet.log import info, setLogLevel
+from mn_wifi.cli import CLI
+
 
 def main():
     """Main execution function."""
     try:
-        os.system(f'sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null')
+        os.system(f"sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null")
     except:
         pass
 
-    setLogLevel('info')
+    setLogLevel("info")
 
     net, drones = setup_topology()
     # net.telemetry(nodes=drones, single=True, data_type='tx_bytes', title="FANET TX BYTES")
@@ -39,16 +45,22 @@ def main():
 
     info("--- Starting Go applications on drones... ---\n")
     for i, drone in enumerate(net.stations, 1):
-        drone_id = f'drone-go-{i}'
-        command = (f"{EXEC_PATH} -id={drone_id} "
-                   f"-tcp-port={TCP_PORT} "
-                   f"-udp-port={UDP_PORT} "
-                   f"-delta-push-sec={int(delta_push_interval)} "
-                   f"-anti-entropy-sec={int(anti_entropy_interval)} "
-                   f"-ttl={int(ttl)} "
-                   f"-bind={BIND_ADDR} "
-                   f"-fanout={FANOUT} "
-                   f"-sample-sec={int(duration)} ")
+        drone_id = f"drone-go-{i}"
+        command = (
+            f"{EXEC_PATH} "
+            f"-id={drone_id} "
+            f"-sample-sec={int(sample_interval_sec)} "
+            f"-fanout={FANOUT} "
+            f"-ttl={int(ttl)} "
+            f"-delta-push-sec={int(delta_push_interval)} "
+            f"-anti-entropy-sec={int(anti_entropy_interval)} "
+            f"-udp-port={UDP_PORT} "
+            f"-tcp-port={TCP_PORT} "
+            f"-bind={BIND_ADDR} "
+            f"-hello-ms={hello_interval_ms} "
+            f"-hello-jitter-ms={hello_jitter_ms} "
+            f"-confidence-threshold={confidence_threshold} "
+        )
         drone.cmd(f'xterm -e "{command}" &')
 
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
@@ -60,16 +72,18 @@ def main():
         for drone in drones:
             filename = os.path.join(OUTPUT_DIR, f"{drone.name}_data.csv")
             # Open file in write mode with newline='' to prevent blank rows
-            file_handle = open(filename, 'w', newline='')
+            file_handle = open(filename, "w", newline="")
             writer = csv.writer(file_handle)
             # Write the header row
             writer.writerow(
-                ['timestamp',
-                'all_deltas',
-                'confidence',
-                'position',
-                'repetition',
-                'convergence']
+                [
+                    "timestamp",
+                    "all_deltas",
+                    "confidence",
+                    "position",
+                    "repetition",
+                    "convergence",
+                ]
             )
 
             csv_files[drone.name] = file_handle
@@ -78,28 +92,36 @@ def main():
 
         stop_event = threading.Event()
 
-        fetch_thread = threading.Thread(target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True)
+        fetch_thread = threading.Thread(
+            target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True
+        )
         fetch_thread.start()
 
-        time.sleep(duration/2)  # Ensure fetch thread starts before sending locations
+        time.sleep(duration / 2)  # Ensure fetch thread starts before sending locations
 
-        send_thread = threading.Thread(target=send_locations, args=(drones, stop_event), daemon=True)
+        send_thread = threading.Thread(
+            target=send_locations, args=(drones, stop_event), daemon=True
+        )
         send_thread.start()
 
-        running_ui_thread = threading.Thread(target=setup_UI, args=(drones,), daemon=True)
+        running_ui_thread = threading.Thread(
+            target=setup_UI, args=(drones,), daemon=True
+        )
         running_ui_thread.start()
 
-        info("\n*** Simulation is running. CSV data is being saved in 'drone_execution_data'. ***\n")
+        info(
+            "\n*** Simulation is running. CSV data is being saved in 'drone_execution_data'. ***\n"
+        )
         info("*** Type 'exit' or Ctrl+D in the CLI to quit. ***\n")
         CLI(net)
 
     finally:
         info("*** Shutting down simulation ***\n")
-        if 'stop_event' in locals():
+        if "stop_event" in locals():
             stop_event.set()
-        if 'fetch_thread' in locals():
+        if "fetch_thread" in locals():
             fetch_thread.join(timeout=5)
-        if 'running_ui_thread' in locals():
+        if "running_ui_thread" in locals():
             running_ui_thread.join(timeout=5)
 
         # Close all open CSV files
@@ -110,8 +132,9 @@ def main():
     info("*** Shutting down simulation ***\n")
     net.stop()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
     # Final cleanup of any lingering Go processes
-    os.system(f'sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null')
+    os.system(f"sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null")
     info("--- Simulation finished ---\n")
