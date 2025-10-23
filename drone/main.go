@@ -228,7 +228,7 @@ func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Diss
 			"status":    "received",
 			"delta_id":  deltaMsg.ID,
 			"ttl":       deltaMsg.TTL,
-			"sender_id": deltaMsg.SenderID,
+			"receiver_id": sensorAPI.GetSensorID(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
