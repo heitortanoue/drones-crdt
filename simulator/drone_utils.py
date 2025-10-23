@@ -64,7 +64,7 @@ def setup_topology():
     )
 
     info("*** Adding ad-hoc links to drones ***\n")
-    kwargs["proto"] = "batman_adv"
+    # kwargs["proto"] = "batman_adv"
     for drone in drones:
         net.addLink(
             drone,

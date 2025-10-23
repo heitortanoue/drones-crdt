@@ -1,6 +1,6 @@
 # Drone setup configuration file
 # Adjust parameters here to change the simulation setup
-DRONE_NUMBER = 3
+DRONE_NUMBER = 5
 DRONE_SPEED = 20  # Maximum speed of each drone in m/s
 DRONE_RANGE = 300  # Communication range of each drone in meters
 DRONE_HEIGHT = 50  # Height of each drone in meters
