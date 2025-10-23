@@ -24,7 +24,7 @@ TTL = 4  # Time-to-live for gossip messages
 FANOUT = 3  # Number of neighbors to gossip with
 
 # Sensor configuration
-SAMPLE_INTERVAL_MS = 50  # Sensor sampling interval in milliseconds
+SAMPLE_INTERVAL_SECONDS = 2  # Interval in seconds between sensor samples
 CONFIDENCE_THRESHOLD = (
     50.0  # Minimum confidence threshold (0-100) to accept fire detection
 )
@@ -63,11 +63,11 @@ ttl = (
     TTL / SIMULATION_MULTIPLIER
 )  # TTL every 'ttl' seconds, considering the speed multiplier
 sample_interval_sec = (
-    SAMPLE_INTERVAL_MS / 1000.0
-)  # convert milliseconds to seconds for Go application
-neighbor_timeout_sec = NEIGHBOR_TIMEOUT_SEC
-transmitter_timeout_sec = TRANSMITTER_TIMEOUT_SEC
-hello_interval_ms = HELLO_INTERVAL_MS
-hello_jitter_ms = HELLO_JITTER_MS
+    SAMPLE_INTERVAL_SECONDS / SIMULATION_MULTIPLIER
+)
+neighbor_timeout_sec = NEIGHBOR_TIMEOUT_SEC / SIMULATION_MULTIPLIER
+transmitter_timeout_sec = TRANSMITTER_TIMEOUT_SEC / SIMULATION_MULTIPLIER
+hello_interval_ms = HELLO_INTERVAL_MS / SIMULATION_MULTIPLIER
+hello_jitter_ms = HELLO_JITTER_MS / SIMULATION_MULTIPLIER
 confidence_threshold = CONFIDENCE_THRESHOLD
 # ---------------------------------------------------------------

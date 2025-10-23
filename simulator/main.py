@@ -57,8 +57,8 @@ def main():
             f"-udp-port={UDP_PORT} "
             f"-tcp-port={TCP_PORT} "
             f"-bind={BIND_ADDR} "
-            f"-hello-ms={hello_interval_ms} "
-            f"-hello-jitter-ms={hello_jitter_ms} "
+            f"-hello-ms={int(hello_interval_ms)} "
+            f"-hello-jitter-ms={int(hello_jitter_ms)} "
             f"-confidence-threshold={confidence_threshold} "
         )
         drone.cmd(f'xterm -e "{command}" &')
