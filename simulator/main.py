@@ -69,13 +69,7 @@ def main():
             f"-confidence-threshold={confidence_threshold} "
         )
 
-        # Try to execute the command and capture any errors
-        result = drone.cmd(f'bash -c "{command} 2>&1 || echo ERROR: $?" &')
-        if result and "ERROR" in result:
-            info(f"*** ERROR starting {drone_id} on {drone.name}: {result} ***\n")
-            info(f"*** Command: {command} ***\n")
-        else:
-            info(f"Started {drone_id} on {drone.name}\n")
+        drone.cmd(f'xterm -e "{command}" &')
 
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
     csv_files = {}
