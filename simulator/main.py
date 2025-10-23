@@ -7,18 +7,17 @@ from config import (
     BIND_ADDR,
     EXEC_PATH,
     FANOUT,
+    FETCH_INTERVAL,
     OUTPUT_DIR,
     TCP_PORT,
+    TTL,
     UDP_PORT,
     anti_entropy_interval,
     confidence_threshold,
     delta_push_interval,
-    duration,
     hello_interval_ms,
     hello_jitter_ms,
-    neighbor_timeout_sec,
     sample_interval_sec,
-    ttl,
 )
 from drone_ui import setup_UI
 from drone_utils import fetch_states, send_locations, setup_topology
@@ -43,6 +42,14 @@ def main():
     net.build()
     net.start()
 
+    # Check if the Go binary exists
+    if not os.path.exists(EXEC_PATH):
+        info(f"*** ERROR: Go drone binary not found at {EXEC_PATH} ***\n")
+        info("*** Please build the Go application first ***\n")
+        info(f"*** Expected path: {os.path.abspath(EXEC_PATH)} ***\n")
+        net.stop()
+        return
+
     info("--- Starting Go applications on drones... ---\n")
     for i, drone in enumerate(net.stations, 1):
         drone_id = f"drone-go-{i}"
@@ -51,7 +58,7 @@ def main():
             f"-id={drone_id} "
             f"-sample-sec={int(sample_interval_sec)} "
             f"-fanout={FANOUT} "
-            f"-ttl={int(ttl)} "
+            f"-ttl={TTL} "
             f"-delta-push-sec={int(delta_push_interval)} "
             f"-anti-entropy-sec={int(anti_entropy_interval)} "
             f"-udp-port={UDP_PORT} "
@@ -61,7 +68,14 @@ def main():
             f"-hello-jitter-ms={int(hello_jitter_ms)} "
             f"-confidence-threshold={confidence_threshold} "
         )
-        drone.cmd(f'xterm -e "{command}" &')
+
+        # Try to execute the command and capture any errors
+        result = drone.cmd(f'bash -c "{command} 2>&1 || echo ERROR: $?" &')
+        if result and "ERROR" in result:
+            info(f"*** ERROR starting {drone_id} on {drone.name}: {result} ***\n")
+            info(f"*** Command: {command} ***\n")
+        else:
+            info(f"Started {drone_id} on {drone.name}\n")
 
     info("\n*** Simulation is running. Type 'exit' or Ctrl+D to quit. ***\n")
     csv_files = {}
@@ -97,7 +111,9 @@ def main():
         )
         fetch_thread.start()
 
-        time.sleep(duration / 2)  # Ensure fetch thread starts before sending locations
+        time.sleep(
+            FETCH_INTERVAL / 2
+        )  # Ensure fetch thread starts before sending locations
 
         send_thread = threading.Thread(
             target=send_locations, args=(drones, stop_event), daemon=True
