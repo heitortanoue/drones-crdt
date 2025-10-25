@@ -87,10 +87,21 @@ func (ds *DisseminationSystem) Start() {
 
 	ds.running = true
 
-	// Starts periodic heartbeat for delta push
-	log.Printf("[DISSEMINATION] Starting heartbeat for delta dissemination")
-	go ds.startHeartbeat()
-	go ds.startAntiEntropyLoop()
+	// Starts periodic heartbeat for delta push (only if enabled)
+	if ds.deltaPushInterval > 0 {
+		log.Printf("[DISSEMINATION] Starting heartbeat for delta dissemination (interval: %v)", ds.deltaPushInterval)
+		go ds.startHeartbeat()
+	} else {
+		log.Printf("[DISSEMINATION] Delta push is disabled")
+	}
+
+	// Start anti-entropy loop (only if enabled)
+	if ds.antiEntropyInterval > 0 {
+		log.Printf("[DISSEMINATION] Starting anti-entropy loop (interval: %v)", ds.antiEntropyInterval)
+		go ds.startAntiEntropyLoop()
+	} else {
+		log.Printf("[DISSEMINATION] Anti-entropy is disabled")
+	}
 
 	log.Printf("[DISSEMINATION] Dissemination system started for %s (fanout: %d, TTL: %d)",
 		ds.droneID, ds.fanout, ds.defaultTTL)

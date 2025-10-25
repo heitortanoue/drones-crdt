@@ -26,11 +26,11 @@ func main() {
 	// Command line flags
 	var (
 		droneID             = flag.String("id", "drone-1", "Unique ID of this drone")
-		sampleSec           = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds")
+		sampleSec           = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds (-1 to disable)")
 		fanout              = flag.Int("fanout", 3, "Number of neighbors for gossip")
 		ttl                 = flag.Int("ttl", 4, "Initial TTL for gossip messages")
-		deltaPushSec        = flag.Int("delta-push-sec", 5, "Delta push interval in seconds")
-		antiEntropySec      = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds")
+		deltaPushSec        = flag.Int("delta-push-sec", 5, "Delta push interval in seconds (-1 to disable)")
+		antiEntropySec      = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds (-1 to disable)")
 		udpPort             = flag.Int("udp-port", 7000, "UDP port for control")
 		tcpPort             = flag.Int("tcp-port", 8080, "TCP port for data")
 		bindAddr            = flag.String("bind", "0.0.0.0", "Bind address")
@@ -127,15 +127,38 @@ func main() {
 	fmt.Printf("=== Drone %s ===\n", cfg.DroneID)
 	fmt.Printf("UDP (control): %s:%d\n", cfg.BindAddr, cfg.UDPPort)
 	fmt.Printf("TCP (data): http://%s:%d\n", cfg.BindAddr, cfg.TCPPort)
-	fmt.Printf("Sampling: every %v\n", cfg.SampleInterval)
+	if *sampleSec > 0 {
+		fmt.Printf("Sampling: every %v\n", cfg.SampleInterval)
+	} else {
+		fmt.Printf("Sampling: DISABLED\n")
+	}
 	fmt.Printf("Gossip: fanout=%d, ttl=%d\n", cfg.Fanout, cfg.TTL)
-	fmt.Printf("Dissemination: delta-push=%v, anti-entropy=%v\n", cfg.DeltaPushInterval, cfg.AntiEntropyInterval)
+	if *deltaPushSec > 0 {
+		fmt.Printf("Delta push: every %v\n", cfg.DeltaPushInterval)
+	} else {
+		fmt.Printf("Delta push: DISABLED\n")
+	}
+	if *antiEntropySec > 0 {
+		fmt.Printf("Anti-entropy: every %v\n", cfg.AntiEntropyInterval)
+	} else {
+		fmt.Printf("Anti-entropy: DISABLED\n")
+	}
 	fmt.Printf("Starting...\n\n")
 
 	// Start components
-	sensorAPI.Start()
+	if *sampleSec > 0 {
+		sensorAPI.Start()
+	} else {
+		fmt.Println("[INFO] Sensor sampling is disabled")
+	}
+
 	controlSystem.Start()
-	disseminationSystem.Start()
+
+	if *deltaPushSec > 0 || *antiEntropySec > 0 {
+		disseminationSystem.Start()
+	} else {
+		fmt.Println("[INFO] Dissemination system is disabled (both delta-push and anti-entropy are disabled)")
+	}
 
 	if err := udpServer.Start(); err != nil {
 		log.Fatalf("Error starting UDP server: %v", err)
@@ -225,9 +248,9 @@ func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Diss
 		state.MergeDelta(deltaMsg.Data)
 
 		response := map[string]interface{}{
-			"status":    "received",
-			"delta_id":  deltaMsg.ID,
-			"ttl":       deltaMsg.TTL,
+			"status":      "received",
+			"delta_id":    deltaMsg.ID,
+			"ttl":         deltaMsg.TTL,
 			"receiver_id": sensorAPI.GetSensorID(),
 		}
 
