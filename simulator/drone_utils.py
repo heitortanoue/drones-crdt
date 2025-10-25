@@ -13,7 +13,7 @@ from config import (
     TCP_PORT,
     X_MAX,
     Y_MAX,
-    duration,
+    FETCH_INTERVAL,
 )
 from mininet.log import info
 from mn_wifi.link import adhoc, wmediumd
@@ -64,7 +64,7 @@ def setup_topology():
     )
 
     info("*** Adding ad-hoc links to drones ***\n")
-    kwargs["proto"] = "batman_adv"
+    # kwargs["proto"] = "batman_adv"
     for drone in drones:
         net.addLink(
             drone,
@@ -92,7 +92,7 @@ def send_drone_location(drone):
 def send_locations(drones, stop_event):
     """Sends the locations of all drones periodically."""
     while not stop_event.is_set():
-        stop_event.wait(duration)
+        stop_event.wait(FETCH_INTERVAL)
         if stop_event.is_set():
             break
         for drone in drones:
@@ -156,7 +156,7 @@ def fetch_states(drones, stop_event, csv_writers):
     repetitions = 0
     convergence = 0.0
     while not stop_event.is_set():
-        stop_event.wait(duration)
+        stop_event.wait(FETCH_INTERVAL)
         if stop_event.is_set():
             break
 
@@ -200,7 +200,7 @@ def fetch_states(drones, stop_event, csv_writers):
         info(f"--- Repetition {repetitions}: Convergence = {convergence:.4f} ---\n")
         if convergence == 1.0:
             info("-> All drones have converged! <-\n")
-            info(f"-> Convergence achieved after {repetitions * duration} seconds <-\n")
+            info(f"-> Convergence achieved after {repetitions * FETCH_INTERVAL} seconds <-\n")
 
 
 def jaccard_index(set1: Set, set2: Set) -> float:

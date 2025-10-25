@@ -58,6 +58,10 @@ func (fs *FireSensor) Stop() {
 	fs.generator.Stop()
 }
 
+func (fs *FireSensor) GetSensorID() string {
+	return fs.sensorID
+}
+
 // AddReading appends a reading to the list (used by the generator or manually)
 func (fs *FireSensor) AddReading(reading FireReading) {
 	fs.mutex.Lock()
