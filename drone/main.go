@@ -62,7 +62,7 @@ func main() {
 	cfg.ConfidenceThreshold = *confidenceThreshold
 
 	// Neighbor table
-	neighborTable := network.NewNeighborTable(cfg.NeighborTimeout)
+	neighborTable := network.NewNeighborTable(cfg.DroneID, cfg.NeighborTimeout)
 
 	state.InitGlobalState(cfg.DroneID)
 
@@ -239,9 +239,15 @@ func createDeltaHandler(sensorAPI *sensor.FireSensor, dissemination *gossip.Diss
 			return
 		}
 
+		// Get message type from header, default to "DELTA" if not present
+		msgType := r.Header.Get("X-Message-Type")
+		if msgType == "" {
+			msgType = "DELTA"
+		}
+
 		if dissemination.IsRunning() {
-			if err := dissemination.ProcessReceivedDelta(deltaMsg); err != nil {
-				log.Printf("[MAIN] Error processing received delta: %v", err)
+			if err := dissemination.ProcessReceivedDelta(deltaMsg, msgType); err != nil {
+				log.Printf("[MAIN] Error processing received %s: %v", msgType, err)
 			}
 		}
 

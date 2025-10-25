@@ -139,11 +139,11 @@ func (ds *DisseminationSystem) DisseminateDelta(delta crdt.FireDelta) error {
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	return ds.forwardDelta(msg)
+	return ds.forwardDelta(msg, "DELTA")
 }
 
 // ProcessReceivedDelta processes a delta received from another node
-func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
+func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg, msgType string) error {
 	ds.mutex.Lock()
 	ds.receivedCount++
 	ds.mutex.Unlock()
@@ -153,7 +153,7 @@ func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 		ds.mutex.Lock()
 		ds.droppedCount++
 		ds.mutex.Unlock()
-		log.Printf("[DISSEMINATION] Delta %s discarded (duplicate)", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] %s %s discarded (duplicate)", msgType, msg.ID.String()[:8])
 		return nil
 	}
 
@@ -165,11 +165,11 @@ func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 		ds.mutex.Lock()
 		ds.droppedCount++
 		ds.mutex.Unlock()
-		log.Printf("[DISSEMINATION] Delta %s discarded (TTL=0)", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] %s %s discarded (TTL=0)", msgType, msg.ID.String()[:8])
 		return nil
 	}
 
-	log.Printf("[DISSEMINATION] Processing delta %s (TTL: %d)", msg.ID.String()[:8], msg.TTL)
+	log.Printf("[DISSEMINATION] Processing %s %s (TTL: %d)", msgType, msg.ID.String()[:8], msg.TTL)
 
 	// Apply received delta to local state
 	state.MergeDelta(msg.Data)
@@ -178,14 +178,14 @@ func (ds *DisseminationSystem) ProcessReceivedDelta(msg DeltaMsg) error {
 	msg.TTL--
 	msg.SenderID = ds.droneID // Update sender to this node
 
-	return ds.forwardDelta(msg)
+	return ds.forwardDelta(msg, msgType)
 }
 
 // forwardDelta sends delta to up to 'fanout' neighbors (with prioritization)
-func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
+func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg, msgType string) error {
 	neighbors := ds.neighborGetter.GetNeighborURLs()
 	if len(neighbors) == 0 {
-		log.Printf("[DISSEMINATION] No neighbors available for delta %s", msg.ID.String()[:8])
+		log.Printf("[DISSEMINATION] No neighbors available for %s %s", msgType, msg.ID.String()[:8])
 		return nil
 	}
 
@@ -203,9 +203,9 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 
 	for _, neighbor := range targets {
 		url := neighbor.GetURL()
-		if err := ds.tcpSender.SendDelta("DELTA", url, msg); err != nil {
-			log.Printf("[DISSEMINATION] Error sending delta %s to %s: %v",
-				msg.ID.String()[:8], url, err)
+		if err := ds.tcpSender.SendDelta(msgType, url, msg); err != nil {
+			log.Printf("[DISSEMINATION] Error sending %s %s to %s: %v",
+				msgType, msg.ID.String()[:8], url, err)
 			errors = append(errors, err)
 		} else {
 			successCount++
@@ -218,8 +218,8 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 	ds.sentCount += int64(successCount)
 	ds.mutex.Unlock()
 
-	log.Printf("[DISSEMINATION] Delta %s sent to %d/%d neighbors (prioritized)",
-		msg.ID.String()[:8], successCount, len(targets))
+	log.Printf("[DISSEMINATION] %s %s sent to %d/%d neighbors (prioritized)",
+		msgType, msg.ID.String()[:8], successCount, len(targets))
 
 	if len(errors) > 0 {
 		return errors[0] // Return the first error
