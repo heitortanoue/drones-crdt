@@ -150,11 +150,14 @@ func (nt *NeighborTable) cleanupExpired() {
 // GetStats returns neighbor table statistics
 func (nt *NeighborTable) GetStats() map[string]interface{} {
 	active := nt.GetActiveNeighbors()
-	urls := nt.GetNeighborURLs()
+	neighbor_ids := make([]string, 0, len(active))
+	for _, neighbor := range active {
+		neighbor_ids = append(neighbor_ids, neighbor.ID)
+	}
 
 	return map[string]interface{}{
 		"neighbors_active": len(active),
-		"neighbor_urls":    urls,
+		"neighbor_ids":     neighbor_ids,
 		"timeout_seconds":  nt.timeout.Seconds(),
 	}
 }
