@@ -73,6 +73,9 @@ class ExperimentRunner:
 
     def run_single_experiment(self, experiment: Dict):
         """Run a single experiment configuration."""
+        # Clean up any existing Mininet processes first
+        self._cleanup_mininet()
+
         # Extract parameters
         params = experiment["parameters"]
         scenario_id = experiment["id"]
@@ -264,6 +267,27 @@ class ExperimentRunner:
     def _cleanup_drones(self):
         """Kill all drone processes."""
         os.system(f"sudo killall -9 {os.path.basename(EXEC_PATH)} &> /dev/null")
+
+    def _cleanup_mininet(self):
+        """Clean up any existing Mininet processes and controllers."""
+        info("*** Cleaning up existing Mininet processes ***\n")
+
+        # Kill any existing controller processes
+        os.system("sudo pkill -9 -f 'controller' 2>/dev/null")
+        os.system("sudo fuser -k 6653/tcp 2>/dev/null")
+
+        # Run mn -c to clean up Mininet
+        os.system("sudo mn -c > /dev/null 2>&1")
+
+        # Additional cleanup for Open vSwitch
+        os.system("sudo ovs-vsctl del-br s1 2>/dev/null")
+        os.system("sudo ovs-vsctl del-br s2 2>/dev/null")
+        os.system("sudo ovs-vsctl del-br s3 2>/dev/null")
+
+        # Wait a moment for cleanup to complete
+        time.sleep(2)
+
+        info("*** Cleanup complete ***\n")
 
     def _generate_report(self, output_dir, experiment, traffic_stats, collector):
         """Generate experiment summary report."""
