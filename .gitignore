@@ -1,3 +1,4 @@
 **/bin
 /simulator/drone_execution_data/
+/simulator/experiment_results/
 /simulator/__pycache__/

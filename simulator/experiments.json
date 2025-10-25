@@ -1,10 +1,10 @@
 {
   "experiments": [
     {
-      "id": "baseline_N10_F3_T4",
+      "id": "baseline_N100_F3_T4",
       "description": "Baseline experiment with 10 drones, fanout 3, TTL 4",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 100,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
