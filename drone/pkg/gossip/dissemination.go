@@ -57,7 +57,7 @@ type NeighborGetter interface {
 
 // TCPSender interface for TCP sending
 type TCPSender interface {
-	SendDelta(url string, delta DeltaMsg) error
+	SendDelta(msgType string, url string, delta DeltaMsg) error
 }
 
 // NewDisseminationSystem creates a new dissemination system
@@ -203,7 +203,7 @@ func (ds *DisseminationSystem) forwardDelta(msg DeltaMsg) error {
 
 	for _, neighbor := range targets {
 		url := neighbor.GetURL()
-		if err := ds.tcpSender.SendDelta(url, msg); err != nil {
+		if err := ds.tcpSender.SendDelta("DELTA", url, msg); err != nil {
 			log.Printf("[DISSEMINATION] Error sending delta %s to %s: %v",
 				msg.ID.String()[:8], url, err)
 			errors = append(errors, err)
@@ -293,7 +293,7 @@ func (ds *DisseminationSystem) startAntiEntropyLoop() {
 			log.Printf("[ANTI-ENTROPY] Sending full state (%d entries) to %s",
 				len(fullState.Entries), targetURL)
 
-			if err := ds.tcpSender.SendDelta(targetURL, msg); err != nil {
+			if err := ds.tcpSender.SendDelta("ANTI-ENTROPY", targetURL, msg); err != nil {
 				log.Printf("[ANTI-ENTROPY] Error sending to %s: %v", targetURL, err)
 			} else {
 				ds.mutex.Lock()
