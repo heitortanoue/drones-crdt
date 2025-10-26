@@ -27,13 +27,15 @@ type NeighborTable struct {
 	neighbors map[string]*Neighbor // key: Drone ID
 	mutex     sync.RWMutex
 	timeout   time.Duration
+	ownID     string // Own drone ID to prevent self-addition
 }
 
 // NewNeighborTable creates a new neighbor table
-func NewNeighborTable(timeout time.Duration) *NeighborTable {
+func NewNeighborTable(ownID string, timeout time.Duration) *NeighborTable {
 	nt := &NeighborTable{
 		neighbors: make(map[string]*Neighbor),
 		timeout:   timeout,
+		ownID:     ownID,
 	}
 
 	// Start goroutine for cleaning up expired neighbors
@@ -48,6 +50,11 @@ func (nt *NeighborTable) AddOrUpdate(hello protocol.HelloMessage, ip net.IP, por
 	defer nt.mutex.Unlock()
 
 	key := hello.ID // Use drone ID as unique key
+
+	// Skip if this is our own ID
+	if key == nt.ownID {
+		return
+	}
 
 	nt.neighbors[key] = &Neighbor{
 		IP:       ip,

@@ -25,7 +25,7 @@ func NewHTTPTCPSender(timeout time.Duration) *HTTPTCPSender {
 }
 
 // SendDelta sends a delta to the given URL via POST /delta
-func (hts *HTTPTCPSender) SendDelta(url string, delta DeltaMsg) error {
+func (hts *HTTPTCPSender) SendDelta(msgType string, url string, delta DeltaMsg) error {
 	// Prepare JSON payload
 	payload, err := json.Marshal(delta)
 	if err != nil {
@@ -43,6 +43,11 @@ func (hts *HTTPTCPSender) SendDelta(url string, delta DeltaMsg) error {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "drone-gossip/1.0")
+	req.Header.Set("X-Message-Type", msgType)
+	req.Header.Set("X-Drone-ID", delta.SenderID)
+	req.Header.Set("X-Gossip-TTL", fmt.Sprintf("%d", delta.TTL))
+	req.Header.Set("X-Message-ID", delta.ID.String())
+	req.Header.Set("X-Timestamp", fmt.Sprintf("%d", delta.Timestamp))
 
 	// Send request
 	resp, err := hts.client.Do(req)

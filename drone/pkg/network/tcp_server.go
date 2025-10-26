@@ -75,6 +75,8 @@ func (s *TCPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // Wrappers for external handlers (to be implemented in later phases)
 func (s *TCPServer) handleSensorWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "SENSOR")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.SensorHandler != nil {
 		s.SensorHandler(w, r)
 	} else {
@@ -83,6 +85,8 @@ func (s *TCPServer) handleSensorWrapper(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *TCPServer) handleDeltaWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "DELTA")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.DeltaHandler != nil {
 		s.DeltaHandler(w, r)
 	} else {
@@ -91,6 +95,8 @@ func (s *TCPServer) handleDeltaWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleStateWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "STATE")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.StateHandler != nil {
 		s.StateHandler(w, r)
 	} else {
@@ -99,6 +105,8 @@ func (s *TCPServer) handleStateWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleStatsWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "STATS")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.StatsHandler != nil {
 		s.StatsHandler(w, r)
 	} else {
@@ -107,6 +115,8 @@ func (s *TCPServer) handleStatsWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "CLEANUP")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.CleanupHandler != nil {
 		s.CleanupHandler(w, r)
 	} else {
@@ -115,6 +125,8 @@ func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *TCPServer) handlePositionWrapper(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Message-Type", "POSITION")
+	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.PositionHandler != nil {
 		s.PositionHandler(w, r)
 	} else {

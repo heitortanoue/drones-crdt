@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/heitortanoue/tcc/pkg/protocol"
 	"golang.org/x/net/ipv4"
@@ -217,21 +218,45 @@ func (s *UDPServer) setupMulticast() error {
 		return fmt.Errorf("invalid multicast address")
 	}
 
-	// Get the default network interface (Docker usually uses eth0)
-	intf, err := net.InterfaceByName("eth0")
-	if err != nil {
-		// Fallback: pick the first available non-loopback multicast interface
-		interfaces, err := net.Interfaces()
-		if err != nil {
-			return fmt.Errorf("failed to get network interfaces: %v", err)
-		}
+	// Dynamically detect the best network interface
+	// Priority: wireless (wlan) > eth0 > first available multicast interface
+	var intf *net.Interface
+	var err error
 
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("failed to get network interfaces: %v", err)
+	}
+
+	// Priority 1: Find wireless interface (name contains "wlan")
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp != 0 &&
+			iface.Flags&net.FlagLoopback == 0 &&
+			iface.Flags&net.FlagMulticast != 0 {
+			if strings.Contains(iface.Name, "wlan") {
+				intf = &iface
+				log.Printf("[UDP] Using wireless interface: %s", iface.Name)
+				break
+			}
+		}
+	}
+
+	// Priority 2: Try eth0 if no wireless interface found
+	if intf == nil {
+		if ethIntf, err := net.InterfaceByName("eth0"); err == nil {
+			intf = ethIntf
+			log.Printf("[UDP] Using eth0 interface for multicast")
+		}
+	}
+
+	// Priority 3: Use first available non-loopback multicast interface
+	if intf == nil {
 		for _, iface := range interfaces {
 			if iface.Flags&net.FlagUp != 0 &&
 				iface.Flags&net.FlagLoopback == 0 &&
 				iface.Flags&net.FlagMulticast != 0 {
 				intf = &iface
-				log.Printf("[UDP] Using network interface: %s", iface.Name)
+				log.Printf("[UDP] Using fallback interface: %s", iface.Name)
 				break
 			}
 		}
@@ -239,8 +264,6 @@ func (s *UDPServer) setupMulticast() error {
 		if intf == nil {
 			return fmt.Errorf("no valid network interface found")
 		}
-	} else {
-		log.Printf("[UDP] Using eth0 interface for multicast")
 	}
 
 	// Create an IPv4 PacketConn for multicast
@@ -260,7 +283,7 @@ func (s *UDPServer) setupMulticast() error {
 		log.Printf("[UDP] Warning: failed to set read buffer: %v", err)
 	}
 
-	log.Printf("[UDP] Joined multicast group on interface %s", intf.Name)
+	log.Printf("[UDP] Successfully joined multicast group %s on interface %s", MULTICAST_IP, intf.Name)
 	return nil
 }
 
