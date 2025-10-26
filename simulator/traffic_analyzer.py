@@ -96,7 +96,9 @@ class TrafficAnalyzer:
         ]
 
         try:
-            output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+            # Capture stderr to see actual errors instead of hiding them
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            output = result.stdout
 
             # Extract X-Message-Type headers from HTTP packets using a separate query
             # This searches for the custom header in the HTTP data
@@ -119,9 +121,10 @@ class TrafficAnalyzer:
             # Build a map of frame number to message type
             frame_to_msg_type = {}
             try:
-                header_output = subprocess.check_output(
-                    header_cmd, stderr=subprocess.DEVNULL
-                ).decode()
+                result = subprocess.run(
+                    header_cmd, capture_output=True, text=True, check=True
+                )
+                header_output = result.stdout
                 for hline in header_output.strip().split("\n"):
                     if not hline or "|" not in hline:
                         continue
@@ -205,7 +208,11 @@ class TrafficAnalyzer:
                 )
 
         except subprocess.CalledProcessError as e:
-            print(f"Warning: Could not analyze {pcap_file}: {e}")
+            print(f"Warning: Could not analyze {pcap_file}")
+            print(f"  Command: {' '.join(cmd)}")
+            print(f"  Error: {e}")
+            if hasattr(e, "stderr") and e.stderr:
+                print(f"  Stderr: {e.stderr}")
 
         return results
 
