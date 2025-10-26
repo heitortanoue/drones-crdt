@@ -220,6 +220,83 @@ def plot_experiment_timeseries(experiment_dir: Path, metric: str = "active_eleme
     plt.close()
 
 
+def plot_drone_positions(experiment_dir: Path):
+    """Plot drone positions over time (trajectory visualization)."""
+    try:
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError:
+        print("matplotlib not installed. Install with: pip install matplotlib")
+        return
+
+    df = load_experiment_metrics(experiment_dir)
+    if df is None or df.empty:
+        return
+
+    # Check if position columns exist
+    if "pos_x" not in df.columns or "pos_y" not in df.columns:
+        print("Warning: Position data not found in metrics")
+        return
+
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+
+    # Plot 1: Trajectories
+    for drone_id in df["drone_id"].unique():
+        drone_df = df[df["drone_id"] == drone_id].sort_values("t")
+        ax1.plot(
+            drone_df["pos_x"],
+            drone_df["pos_y"],
+            marker="o",
+            markersize=2,
+            alpha=0.6,
+            label=drone_id,
+        )
+        # Mark start and end
+        ax1.plot(
+            drone_df["pos_x"].iloc[0],
+            drone_df["pos_y"].iloc[0],
+            "go",
+            markersize=8,
+            alpha=0.8,
+        )  # Start
+        ax1.plot(
+            drone_df["pos_x"].iloc[-1],
+            drone_df["pos_y"].iloc[-1],
+            "r^",
+            markersize=8,
+            alpha=0.8,
+        )  # End
+
+    ax1.set_xlabel("X Position")
+    ax1.set_ylabel("Y Position")
+    ax1.set_title(f"Drone Trajectories - {experiment_dir.parent.name}")
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
+    ax1.grid(True, alpha=0.3)
+    ax1.set_aspect("equal")
+
+    # Plot 2: Position over time (both X and Y)
+    relative_time = df["t"] - df["t"].min()
+    for drone_id in df["drone_id"].unique():
+        drone_df = df[df["drone_id"] == drone_id]
+        drone_time = drone_df["t"] - df["t"].min()
+        ax2.plot(drone_time, drone_df["pos_x"], alpha=0.5, linestyle="-")
+        ax2.plot(drone_time, drone_df["pos_y"], alpha=0.5, linestyle="--")
+
+    ax2.set_xlabel("Time (seconds)")
+    ax2.set_ylabel("Position")
+    ax2.set_title("Position vs Time (solid=X, dashed=Y)")
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    # Save plot
+    output_file = experiment_dir / "position_trajectory.png"
+    plt.savefig(output_file, dpi=150)
+    print(f"Position plot saved to: {output_file}")
+    plt.close()
+
+
 def main():
     """Main entry point."""
     if len(sys.argv) > 1:
@@ -228,10 +305,21 @@ def main():
                 print(
                     "Usage: python analyze_experiments.py plot <experiment_dir> [metric]"
                 )
+                print(
+                    "       python analyze_experiments.py plot_position <experiment_dir>"
+                )
                 return
             experiment_dir = Path(sys.argv[2])
             metric = sys.argv[3] if len(sys.argv) > 3 else "active_elements"
             plot_experiment_timeseries(experiment_dir, metric)
+        elif sys.argv[1] == "plot_position":
+            if len(sys.argv) < 3:
+                print(
+                    "Usage: python analyze_experiments.py plot_position <experiment_dir>"
+                )
+                return
+            experiment_dir = Path(sys.argv[2])
+            plot_drone_positions(experiment_dir)
         else:
             results_dir = Path(sys.argv[1])
             compare_experiments(results_dir)

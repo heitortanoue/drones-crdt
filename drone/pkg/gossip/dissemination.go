@@ -314,6 +314,12 @@ func (ds *DisseminationSystem) GetStats() map[string]interface{} {
 	ds.mutex.RLock()
 	defer ds.mutex.RUnlock()
 
+	// Calculate delta messages (total sent - anti-entropy)
+	deltaMessages := ds.sentCount - ds.antiEntropyCount
+	if deltaMessages < 0 {
+		deltaMessages = 0
+	}
+
 	return map[string]interface{}{
 		"running":                   ds.running,
 		"fanout":                    ds.fanout,
@@ -324,6 +330,7 @@ func (ds *DisseminationSystem) GetStats() map[string]interface{} {
 		"received_count":            ds.receivedCount,
 		"dropped_count":             ds.droppedCount,
 		"anti_entropy_count":        ds.antiEntropyCount,
+		"delta_messages_sent":       deltaMessages,
 		"cache_size":                ds.cache.Size(),
 		"neighbor_count":            ds.neighborGetter.Count(),
 	}
