@@ -26,11 +26,11 @@ func main() {
 	// Command line flags
 	var (
 		droneID             = flag.String("id", "drone-1", "Unique ID of this drone")
-		sampleSec           = flag.Int("sample-sec", 10, "Sensor sampling interval in seconds (-1 to disable)")
+		sampleMs            = flag.Int("sample-ms", 10000, "Sensor sampling interval in milliseconds (-1 to disable)")
 		fanout              = flag.Int("fanout", 3, "Number of neighbors for gossip")
 		ttl                 = flag.Int("ttl", 4, "Initial TTL for gossip messages")
-		deltaPushSec        = flag.Int("delta-push-sec", 5, "Delta push interval in seconds (-1 to disable)")
-		antiEntropySec      = flag.Int("anti-entropy-sec", 60, "Anti-entropy interval in seconds (-1 to disable)")
+		deltaPushMs         = flag.Int("delta-push-ms", 1000, "Delta push interval in milliseconds (-1 to disable)")
+		antiEntropyMs       = flag.Int("anti-entropy-ms", 60000, "Anti-entropy interval in milliseconds (-1 to disable)")
 		udpPort             = flag.Int("udp-port", 7000, "UDP port for control")
 		tcpPort             = flag.Int("tcp-port", 8080, "TCP port for data")
 		bindAddr            = flag.String("bind", "0.0.0.0", "Bind address")
@@ -49,11 +49,11 @@ func main() {
 	// Create drone configuration
 	cfg := config.DefaultConfig()
 	cfg.DroneID = *droneID
-	cfg.SampleInterval = time.Duration(*sampleSec) * time.Second
+	cfg.SampleInterval = time.Duration(*sampleMs) * time.Millisecond
 	cfg.Fanout = *fanout
 	cfg.TTL = *ttl
-	cfg.DeltaPushInterval = time.Duration(*deltaPushSec) * time.Second
-	cfg.AntiEntropyInterval = time.Duration(*antiEntropySec) * time.Second
+	cfg.DeltaPushInterval = time.Duration(*deltaPushMs) * time.Millisecond
+	cfg.AntiEntropyInterval = time.Duration(*antiEntropyMs) * time.Millisecond
 	cfg.UDPPort = *udpPort
 	cfg.TCPPort = *tcpPort
 	cfg.BindAddr = *bindAddr
@@ -127,18 +127,18 @@ func main() {
 	fmt.Printf("=== Drone %s ===\n", cfg.DroneID)
 	fmt.Printf("UDP (control): %s:%d\n", cfg.BindAddr, cfg.UDPPort)
 	fmt.Printf("TCP (data): http://%s:%d\n", cfg.BindAddr, cfg.TCPPort)
-	if *sampleSec > 0 {
+	if *sampleMs > 0 {
 		fmt.Printf("Sampling: every %v\n", cfg.SampleInterval)
 	} else {
 		fmt.Printf("Sampling: DISABLED\n")
 	}
 	fmt.Printf("Gossip: fanout=%d, ttl=%d\n", cfg.Fanout, cfg.TTL)
-	if *deltaPushSec > 0 {
+	if *deltaPushMs > 0 {
 		fmt.Printf("Delta push: every %v\n", cfg.DeltaPushInterval)
 	} else {
 		fmt.Printf("Delta push: DISABLED\n")
 	}
-	if *antiEntropySec > 0 {
+	if *antiEntropyMs > 0 {
 		fmt.Printf("Anti-entropy: every %v\n", cfg.AntiEntropyInterval)
 	} else {
 		fmt.Printf("Anti-entropy: DISABLED\n")
@@ -146,7 +146,7 @@ func main() {
 	fmt.Printf("Starting...\n\n")
 
 	// Start components
-	if *sampleSec > 0 {
+	if *sampleMs > 0 {
 		sensorAPI.Start()
 	} else {
 		fmt.Println("[INFO] Sensor sampling is disabled")
@@ -154,7 +154,7 @@ func main() {
 
 	controlSystem.Start()
 
-	if *deltaPushSec > 0 || *antiEntropySec > 0 {
+	if *deltaPushMs > 0 || *antiEntropyMs > 0 {
 		disseminationSystem.Start()
 	} else {
 		fmt.Println("[INFO] Dissemination system is disabled (both delta-push and anti-entropy are disabled)")
@@ -178,10 +178,10 @@ USAGE:
   %s [options]
 
 EXAMPLES:
-  %s -id=drone-1 -sample-sec=10
-  %s -id=drone-2 -sample-sec=5 -fanout=2 -ttl=3
+  %s -id=drone-1 -sample-ms=10000
+  %s -id=drone-2 -sample-ms=5000 -fanout=2 -ttl=3
   %s -id=drone-3 -udp-port=7001 -tcp-port=8081
-  %s -id=drone-4 -delta-push-sec=3 -anti-entropy-sec=30
+  %s -id=drone-4 -delta-push-ms=3000 -anti-entropy-ms=30000
 
 OPTIONS:
 `, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])

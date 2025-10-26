@@ -186,6 +186,9 @@ class ExperimentRunner:
         net.build()
         net.start()
 
+        # Wait for network interfaces to be fully ready
+        time.sleep(3)
+
         # Restore original values
         for key, value in original_values.items():
             setattr(config, key, value)
@@ -214,11 +217,11 @@ class ExperimentRunner:
             command = (
                 f"{EXEC_PATH} "
                 f"-id={drone_id} "
-                f"-sample-sec={int(sample_interval)} "
+                f"-sample-ms={int(sample_interval * 1000)} "
                 f"-fanout={params['fanout']} "
                 f"-ttl={params['ttl']} "
-                f"-delta-push-sec={int(delta_push_interval)} "
-                f"-anti-entropy-sec={int(anti_entropy_interval)} "
+                f"-delta-push-ms={int(delta_push_interval * 1000)} "
+                f"-anti-entropy-ms={int(anti_entropy_interval * 1000)} "
                 f"-udp-port={UDP_PORT} "
                 f"-tcp-port={TCP_PORT} "
                 f"-bind={BIND_ADDR} "
@@ -276,6 +279,15 @@ class ExperimentRunner:
         os.system("sudo pkill -9 -f 'controller' 2>/dev/null")
         os.system("sudo fuser -k 6653/tcp 2>/dev/null")
 
+        # Kill any lingering tcpdump processes
+        os.system("sudo pkill -9 tcpdump 2>/dev/null")
+
+        # Clean up any tc (traffic control) rules on all wireless interfaces
+        # Use a more generic approach to catch all sta*-wlan0 interfaces
+        os.system(
+            "for iface in $(ip link show | grep -o 'sta[0-9]*-wlan0'); do sudo tc qdisc del dev $iface root 2>/dev/null; done"
+        )
+
         # Run mn -c to clean up Mininet
         os.system("sudo mn -c > /dev/null 2>&1")
 
@@ -285,7 +297,7 @@ class ExperimentRunner:
         os.system("sudo ovs-vsctl del-br s3 2>/dev/null")
 
         # Wait a moment for cleanup to complete
-        time.sleep(2)
+        time.sleep(3)
 
         info("*** Cleanup complete ***\n")
 

@@ -70,6 +70,7 @@ class TrafficAnalyzer:
         }
 
         # Get packet details including HTTP headers
+        # For custom headers, we need to use http.request.line or parse the full HTTP data
         cmd = [
             "tshark",
             "-r",
@@ -87,7 +88,7 @@ class TrafficAnalyzer:
             "-e",
             "http.response",
             "-e",
-            "http.x_message_type",  # Our custom header
+            "http.request.method",
             "-e",
             "udp.port",
             "-E",
@@ -97,9 +98,55 @@ class TrafficAnalyzer:
         try:
             output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
 
+            # Extract X-Message-Type headers from HTTP packets using a separate query
+            # This searches for the custom header in the HTTP data
+            header_cmd = [
+                "tshark",
+                "-r",
+                str(pcap_file),
+                "-Y",
+                "http.request",
+                "-T",
+                "fields",
+                "-e",
+                "frame.number",
+                "-e",
+                "http.file_data",
+                "-E",
+                "separator=|",
+            ]
+
+            # Build a map of frame number to message type
+            frame_to_msg_type = {}
+            try:
+                header_output = subprocess.check_output(
+                    header_cmd, stderr=subprocess.DEVNULL
+                ).decode()
+                for hline in header_output.strip().split("\n"):
+                    if not hline or "|" not in hline:
+                        continue
+                    hparts = hline.split("|", 1)
+                    frame_num = hparts[0]
+                    http_data = hparts[1] if len(hparts) > 1 else ""
+
+                    # Look for X-Message-Type in the HTTP data
+                    if "X-Message-Type:" in http_data:
+                        # Extract the value after X-Message-Type:
+                        for line in http_data.split("\\n"):
+                            if "X-Message-Type:" in line:
+                                msg_type = (
+                                    line.split("X-Message-Type:")[-1].strip().split()[0]
+                                )
+                                frame_to_msg_type[frame_num] = msg_type.upper()
+                                break
+            except subprocess.CalledProcessError:
+                pass  # If we can't extract headers, fall back to URI inspection
+
+            frame_num = 0
             for line in output.strip().split("\n"):
                 if not line:
                     continue
+                frame_num += 1
                 parts = line.split("|")
                 if len(parts) < 2:
                     continue
@@ -107,7 +154,8 @@ class TrafficAnalyzer:
                 size = int(parts[0]) if parts[0] else 0
                 proto = parts[1] if len(parts) > 1 else ""
                 uri = parts[2] if len(parts) > 2 else ""
-                message_type_header = parts[4] if len(parts) > 4 else ""
+                # parts[3] is http.response
+                # parts[4] is http.request.method
                 udp_port = parts[5] if len(parts) > 5 else ""
 
                 results["total_packets"] += 1
@@ -128,12 +176,14 @@ class TrafficAnalyzer:
                     results["tcp_packets"] += 1
                     results["tcp_bytes"] += size
 
-                    # Try to determine from custom header first
-                    if message_type_header:
-                        msg_type = message_type_header.upper()
+                    # First try to get from extracted headers
+                    frame_key = str(frame_num)
+                    if frame_key in frame_to_msg_type:
+                        msg_type = frame_to_msg_type[frame_key]
                     # Fallback to URI inspection
                     elif "/delta" in uri:
-                        msg_type = "DELTA"
+                        # Check if it's DELTA or ANTI-ENTROPY (both use /delta endpoint)
+                        msg_type = "DELTA"  # Will be overridden by header if available
                     elif "/state" in uri:
                         msg_type = "STATE"
                     elif "/stats" in uri:
