@@ -40,16 +40,16 @@ func DefaultConfig() *DroneConfig {
 		UDPPort:             7000,
 		TCPPort:             8080,
 		BindAddr:            "0.0.0.0",
-		SampleInterval:      50 * time.Millisecond,
+		SampleInterval:      10000 * time.Millisecond, // 10 seconds
 		Fanout:              3,
 		TTL:                 4,
-		DeltaPushInterval:   1 * time.Second,
-		AntiEntropyInterval: 60 * time.Second,
-		NeighborTimeout:     3 * time.Second,
-		TransmitterTimeout:  2 * time.Second,
-		HelloInterval:       1000 * time.Millisecond, // 1 second base interval
-		HelloJitter:         200 * time.Millisecond,  // ±200ms jitter
-		ConfidenceThreshold: 50.0,                    // 50% minimum confidence
+		DeltaPushInterval:   1000 * time.Millisecond,  // 1 second
+		AntiEntropyInterval: 60000 * time.Millisecond, // 60 seconds
+		NeighborTimeout:     3000 * time.Millisecond,  // 3 seconds
+		TransmitterTimeout:  2000 * time.Millisecond,  // 2 seconds
+		HelloInterval:       1000 * time.Millisecond,  // 1 second base interval
+		HelloJitter:         200 * time.Millisecond,   // ±200ms jitter
+		ConfidenceThreshold: 50.0,                     // 50% minimum confidence
 		GridSize:            GridSize{X: 2500, Y: 2500},
 	}
 }

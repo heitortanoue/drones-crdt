@@ -186,6 +186,9 @@ class ExperimentRunner:
         net.build()
         net.start()
 
+        # Wait for network interfaces to be fully ready
+        time.sleep(3)
+
         # Restore original values
         for key, value in original_values.items():
             setattr(config, key, value)
@@ -214,11 +217,11 @@ class ExperimentRunner:
             command = (
                 f"{EXEC_PATH} "
                 f"-id={drone_id} "
-                f"-sample-sec={int(sample_interval)} "
+                f"-sample-ms={int(sample_interval * 1000)} "
                 f"-fanout={params['fanout']} "
                 f"-ttl={params['ttl']} "
-                f"-delta-push-sec={int(delta_push_interval)} "
-                f"-anti-entropy-sec={int(anti_entropy_interval)} "
+                f"-delta-push-ms={int(delta_push_interval * 1000)} "
+                f"-anti-entropy-ms={int(anti_entropy_interval * 1000)} "
                 f"-udp-port={UDP_PORT} "
                 f"-tcp-port={TCP_PORT} "
                 f"-bind={BIND_ADDR} "
@@ -245,8 +248,9 @@ class ExperimentRunner:
                 try:
                     # Fetch stats from drone
                     stats = self._fetch_drone_stats(drone)
+                    state = self._fetch_drone_state(drone)
                     if stats:
-                        collector.record_metrics(drone.name, timestamp, stats)
+                        collector.record_metrics(drone.name, timestamp, stats, state)
                 except Exception as e:
                     info(f"Error fetching stats from {drone.name}: {e}\n")
 
@@ -257,6 +261,16 @@ class ExperimentRunner:
     def _fetch_drone_stats(self, drone) -> Dict:
         """Fetch comprehensive stats from a drone."""
         cmd = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats"
+        response_str = drone.cmd(cmd).strip()
+
+        try:
+            return json.loads(response_str)
+        except json.JSONDecodeError:
+            return None
+
+    def _fetch_drone_state(self, drone) -> Dict:
+        """Fetch state info from a drone."""
+        cmd = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state"
         response_str = drone.cmd(cmd).strip()
 
         try:
@@ -276,6 +290,15 @@ class ExperimentRunner:
         os.system("sudo pkill -9 -f 'controller' 2>/dev/null")
         os.system("sudo fuser -k 6653/tcp 2>/dev/null")
 
+        # Kill any lingering tcpdump processes
+        os.system("sudo pkill -9 tcpdump 2>/dev/null")
+
+        # Clean up any tc (traffic control) rules on all wireless interfaces
+        # Use a more generic approach to catch all sta*-wlan0 interfaces
+        os.system(
+            "for iface in $(ip link show | grep -o 'sta[0-9]*-wlan0'); do sudo tc qdisc del dev $iface root 2>/dev/null; done"
+        )
+
         # Run mn -c to clean up Mininet
         os.system("sudo mn -c > /dev/null 2>&1")
 
@@ -285,7 +308,7 @@ class ExperimentRunner:
         os.system("sudo ovs-vsctl del-br s3 2>/dev/null")
 
         # Wait a moment for cleanup to complete
-        time.sleep(2)
+        time.sleep(3)
 
         info("*** Cleanup complete ***\n")
 
@@ -352,9 +375,10 @@ class MetricsCollector:
                 "t",
                 "drone_id",
                 "scenario_id",
+                # Position
+                "pos_x",
+                "pos_y",
                 # Network metrics
-                "bytes_sent_total",
-                "bytes_recv_total",
                 "msgs_sent_total",
                 "msgs_recv_total",
                 "duplicates_dropped",
@@ -372,17 +396,41 @@ class MetricsCollector:
             ]
         )
 
-    def record_metrics(self, drone_id: str, timestamp: float, stats: Dict):
-        """Record metrics from a drone's /stats endpoint."""
+    def record_metrics(
+        self, drone_id: str, timestamp: float, stats: Dict, state: Dict = None
+    ):
+        """Record metrics from a drone's /stats and /state endpoints."""
         # Extract nested stats
         dissemination = stats.get("dissemination", {})
         network = stats.get("network", {})
         sensor = stats.get("sensor_system", {})
 
-        # Get state info (would need to fetch from /state endpoint)
-        # For now, we'll use placeholder values
-        active_elements = sensor.get("active_fires", 0)
-        state_entries = active_elements  # Simplified
+        # Get position from sensor stats
+        position = sensor.get("position", {})
+        pos_x = position.get("x", 0)
+        pos_y = position.get("y", 0)
+
+        # Get state info from /state endpoint
+        if state:
+            # total_deltas is the number of active fire cells
+            active_elements = state.get("total_deltas", 0)
+            # unique_sensors is the number of different drones that detected fires
+            state_entries = state.get("unique_sensors", 0)
+        else:
+            active_elements = 0
+            state_entries = 0
+
+        # Get dissemination metrics
+        delta_messages_sent = dissemination.get("delta_messages_sent", 0)
+        anti_entropy_sent = dissemination.get("anti_entropy_count", 0)
+
+        # Get neighbor count - it's the length of neighbor_ids array in network stats
+        neighbor_ids = network.get("neighbor_ids", [])
+        neighbor_count = (
+            len(neighbor_ids)
+            if isinstance(neighbor_ids, list)
+            else network.get("neighbors_active", 0)
+        )
 
         # Write row
         self.csv_writer.writerow(
@@ -390,10 +438,10 @@ class MetricsCollector:
                 timestamp,
                 drone_id,
                 self.scenario_id,
-                # Network - these are estimated from dissemination stats
-                dissemination.get("sent_count", 0)
-                * 1000,  # Approximate bytes (count * avg size)
-                dissemination.get("received_count", 0) * 1000,
+                # Position
+                pos_x,
+                pos_y,
+                # Network
                 dissemination.get("sent_count", 0),
                 dissemination.get("received_count", 0),
                 dissemination.get("dropped_count", 0),
@@ -402,11 +450,10 @@ class MetricsCollector:
                 active_elements,
                 state_entries,
                 # Dissemination
-                dissemination.get("sent_count", 0)
-                - dissemination.get("anti_entropy_count", 0),
-                dissemination.get("anti_entropy_count", 0),
+                delta_messages_sent,
+                anti_entropy_sent,
                 # Network
-                network.get("neighbor_count", 0),
+                neighbor_count,
                 # Raw
                 json.dumps(stats),
             ]
