@@ -35,8 +35,15 @@ class TrafficAnalyzer:
         print(f"Started capture on {drone.name} -> {pcap_file}")
 
     def stop_capture(self, drone):
-        """Stop tcpdump on drone."""
-        drone.cmd(f"pkill -f 'tcpdump -i {drone.name}-wlan0'")
+        """Stop tcpdump on drone gracefully to avoid corrupted pcap files."""
+        # Send SIGTERM first to allow tcpdump to flush buffers
+        drone.cmd(f"pkill -TERM -f 'tcpdump -i {drone.name}-wlan0'")
+        # Give it a moment to flush
+        import time
+
+        time.sleep(0.5)
+        # Force kill any remaining processes
+        drone.cmd(f"pkill -9 -f 'tcpdump -i {drone.name}-wlan0'")
 
     def analyze_pcap(self, drone_name: str) -> Dict:
         """
@@ -46,6 +53,17 @@ class TrafficAnalyzer:
         """
         pcap_file = self.pcap_dir / f"{drone_name}.pcap"
         if not pcap_file.exists():
+            return {}
+
+        # Check if file is empty or very small (likely corrupted)
+        file_size = pcap_file.stat().st_size
+        if file_size == 0:
+            print(f"Warning: {pcap_file} is empty, skipping analysis")
+            return {}
+        if file_size < 24:  # Minimum pcap header size
+            print(
+                f"Warning: {pcap_file} is too small ({file_size} bytes), likely corrupted"
+            )
             return {}
 
         results = {
@@ -208,11 +226,39 @@ class TrafficAnalyzer:
                 )
 
         except subprocess.CalledProcessError as e:
-            print(f"Warning: Could not analyze {pcap_file}")
-            print(f"  Command: {' '.join(cmd)}")
-            print(f"  Error: {e}")
-            if hasattr(e, "stderr") and e.stderr:
-                print(f"  Stderr: {e.stderr}")
+            stderr_msg = e.stderr if hasattr(e, "stderr") and e.stderr else ""
+
+            # Check if it's a truncated/corrupted pcap file
+            if (
+                "cut short" in stderr_msg
+                or "appears to have been cut short" in stderr_msg
+            ):
+                print(
+                    f"Warning: {pcap_file.name} was corrupted (cut short), attempting recovery..."
+                )
+                # Try to salvage what we can by skipping the -Y filter
+                try:
+                    simple_cmd = [
+                        "tshark",
+                        "-r",
+                        str(pcap_file),
+                        "-q",
+                        "-z",
+                        "io,stat,0",
+                    ]
+                    result = subprocess.run(simple_cmd, capture_output=True, text=True)
+                    if "captured" in result.stdout:
+                        print(
+                            f"  File partially readable but too corrupted for detailed analysis"
+                        )
+                except:
+                    pass
+            else:
+                print(f"Warning: Could not analyze {pcap_file}")
+                print(f"  Command: {' '.join(cmd)}")
+                print(f"  Error: {e}")
+                if stderr_msg:
+                    print(f"  Stderr: {stderr_msg}")
 
         return results
 
