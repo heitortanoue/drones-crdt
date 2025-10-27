@@ -24,14 +24,14 @@ class TrafficAnalyzer:
         pcap_file = self.pcap_dir / f"{drone.name}.pcap"
 
         # Capture both UDP (HELLO) and TCP (state sync) traffic
-        filter_expr = f"udp port {udp_port} or tcp port {tcp_port}"
+        filter_expr = f"udp port {udp_port} or tcp port {tcp_port} "
 
         cmd = (
-            f"tcpdump -i {interface} -w {pcap_file} "
-            f"-s 65535 '{filter_expr}' 2>/dev/null &"
+            f"tcpdump -i {interface} -w {pcap_file}"
+            #f"-s 65535 '{filter_expr}' 2>/dev/null &"
         )
 
-        drone.cmd(cmd)
+        drone.cmd(f'xterm -e "{cmd}" 2>/dev/null &')
         print(f"Started capture on {drone.name} -> {pcap_file}")
 
     def stop_capture(self, drone):

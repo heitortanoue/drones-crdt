@@ -10,9 +10,9 @@
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 300,
+        "duration_sec": 120,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": true
     },
@@ -26,11 +26,11 @@
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 300,
+        "duration_sec": 60,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "fanout_sweep_N10_F4",
@@ -44,7 +44,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -60,7 +60,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -76,7 +76,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -92,7 +92,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -108,7 +108,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -124,7 +124,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 5,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -140,7 +140,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     },
@@ -156,7 +156,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "GaussMarkov"
+        "mobility_model": "RandomWaypoint"
       },
       "enabled": false
     }
