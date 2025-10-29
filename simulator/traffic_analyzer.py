@@ -98,13 +98,15 @@ class TrafficAnalyzer:
             "-T",
             "fields",
             "-e",
+            "frame.number",
+            "-e",
             "frame.len",
             "-e",
             "ip.proto",
             "-e",
             "http.request.uri",
             "-e",
-            "http.response",
+            "http.response.line",
             "-e",
             "http.request.method",
             "-e",
@@ -117,52 +119,7 @@ class TrafficAnalyzer:
             # Capture stderr to see actual errors instead of hiding them
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             output = result.stdout
-
-            # Extract X-Message-Type headers from HTTP packets using a separate query
-            # This searches for the custom header in the HTTP data
-            header_cmd = [
-                "tshark",
-                "-r",
-                str(pcap_file),
-                "-Y",
-                "http.request",
-                "-T",
-                "fields",
-                "-e",
-                "frame.number",
-                "-e",
-                "http.file_data",
-                "-E",
-                "separator=|",
-            ]
-
-            # Build a map of frame number to message type
             frame_to_msg_type = {}
-            try:
-                result = subprocess.run(
-                    header_cmd, capture_output=True, text=True, check=True
-                )
-                header_output = result.stdout
-                for hline in header_output.strip().split("\n"):
-                    if not hline or "|" not in hline:
-                        continue
-                    hparts = hline.split("|", 1)
-                    frame_num = hparts[0]
-                    http_data = hparts[1] if len(hparts) > 1 else ""
-
-                    # Look for X-Message-Type in the HTTP data
-                    if "X-Message-Type:" in http_data:
-                        # Extract the value after X-Message-Type:
-                        for line in http_data.split("\\n"):
-                            if "X-Message-Type:" in line:
-                                msg_type = (
-                                    line.split("X-Message-Type:")[-1].strip().split()[0]
-                                )
-                                frame_to_msg_type[frame_num] = msg_type.upper()
-                                break
-            except subprocess.CalledProcessError:
-                pass  # If we can't extract headers, fall back to URI inspection
-
             frame_num = 0
             for line in output.strip().split("\n"):
                 if not line:
@@ -172,12 +129,22 @@ class TrafficAnalyzer:
                 if len(parts) < 2:
                     continue
 
-                size = int(parts[0]) if parts[0] else 0
-                proto = parts[1] if len(parts) > 1 else ""
-                uri = parts[2] if len(parts) > 2 else ""
-                # parts[3] is http.response
-                # parts[4] is http.request.method
-                udp_port = parts[5] if len(parts) > 5 else ""
+                # Mapeamento correto dos campos
+                frame_key = parts[0].strip()      # Índice 0: frame.number
+                size = int(parts[1]) if parts[1] else 0 # Índice 1: frame.len
+                proto = parts[2] if len(parts) > 2 else ""  # Índice 2: ip.proto
+                uri = parts[3] if len(parts) > 3 else ""    # Índice 3: http.request.uri
+                http_response_value = parts[4] if len(parts) > 4 else "" # index do header
+
+                header_lines = http_response_value.split('\r\n,')
+                for line in header_lines:
+                    if ':' in line: 
+                        _, value = line.split(':', 1)
+                        value_clean = value.strip()
+                        frame_to_msg_type[frame_key] = value_clean
+                        print(frame_key, " has ", value_clean)
+
+                udp_port = parts[6] if len(parts) > 6 else "" # Índice 6: udp.port
 
                 results["total_packets"] += 1
                 results["total_bytes"] += size
@@ -196,9 +163,7 @@ class TrafficAnalyzer:
                 elif proto == "6":  # TCP
                     results["tcp_packets"] += 1
                     results["tcp_bytes"] += size
-
-                    # First try to get from extracted headers
-                    frame_key = str(frame_num)
+                    
                     if frame_key in frame_to_msg_type:
                         msg_type = frame_to_msg_type[frame_key]
                     # Fallback to URI inspection
@@ -212,7 +177,7 @@ class TrafficAnalyzer:
                     elif "/position" in uri:
                         msg_type = "POSITION"
 
-                # Update message type counters
+                # Atualizar contadores
                 if msg_type in results["by_message_type"]:
                     results["by_message_type"][msg_type]["count"] += 1
                     results["by_message_type"][msg_type]["bytes"] += size
@@ -228,7 +193,6 @@ class TrafficAnalyzer:
         except subprocess.CalledProcessError as e:
             stderr_msg = e.stderr if hasattr(e, "stderr") and e.stderr else ""
 
-            # Check if it's a truncated/corrupted pcap file
             if (
                 "cut short" in stderr_msg
                 or "appears to have been cut short" in stderr_msg
@@ -236,7 +200,6 @@ class TrafficAnalyzer:
                 print(
                     f"Warning: {pcap_file.name} was corrupted (cut short), attempting recovery..."
                 )
-                # Try to salvage what we can by skipping the -Y filter
                 try:
                     simple_cmd = [
                         "tshark",
@@ -261,7 +224,7 @@ class TrafficAnalyzer:
                     print(f"  Stderr: {stderr_msg}")
 
         return results
-
+    
     def analyze_all(self, drone_names: List[str]) -> Dict:
         """Analyze all drone pcaps and return aggregated stats."""
         all_stats = {}

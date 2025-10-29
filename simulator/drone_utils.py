@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from typing import List, Set
+import threading
 
 from config import (
     ATTENUATION,
@@ -50,6 +51,7 @@ def setup_topology():
             max_v=SPEED,
             **kwargs,
         )
+        drone.lock = threading.Lock()
         drones.append(drone)
 
     info("*** Configuring the signal propagation model ***\n")
@@ -86,7 +88,8 @@ def send_drone_location(drone):
     command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
     -H 'Content-Type: application/json' \
     -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}'"""
-    drone.cmd(command).strip()
+    with drone.lock:
+        drone.cmd(command).strip()
 
 
 def send_locations(drones, stop_event):
@@ -102,7 +105,8 @@ def send_locations(drones, stop_event):
 def fetch_stats(drone):
     command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats"
     try:
-        response_str = drone.cmd(command).strip()
+        with drone.lock:
+            response_str = drone.cmd(command).strip()
     except Exception as e:
         info(f"-> ERROR for {drone.name}: Could not fetch stats. Try again <-\n")
         return None
@@ -120,7 +124,8 @@ def fetch_stats(drone):
 
 def fetch_state(drone):
     command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state"
-    response_str = drone.cmd(command).strip()
+    with drone.lock:
+        response_str = drone.cmd(command).strip()
 
     ## Parse the JSON response and log the specific fields.
     try:
