@@ -5,6 +5,7 @@ Captures and analyzes packet-level metrics from Mininet-WiFi interfaces.
 
 import json
 import subprocess
+import re
 from pathlib import Path
 from typing import Dict, List
 
@@ -94,7 +95,7 @@ class TrafficAnalyzer:
             "-r",
             str(pcap_file),
             "-Y",
-            "http or udp",  # Filter for HTTP and UDP
+            "http",  # Filter for HTTP and UDP
             "-T",
             "fields",
             "-e",
@@ -102,15 +103,17 @@ class TrafficAnalyzer:
             "-e",
             "frame.len",
             "-e",
-            "ip.proto",
+            "http.response_for.uri",
             "-e",
-            "http.request.uri",
+            "http.request.line",
             "-e",
             "http.response.line",
-            "-e",
-            "http.request.method",
-            "-e",
-            "udp.port",
+            # "-e",
+            # "http.request.method",
+            # "-e",
+            # "udp.port",
+            # "-e",
+            # "http.file_data",
             "-E",
             "separator=|",
         ]
@@ -132,19 +135,15 @@ class TrafficAnalyzer:
                 # Mapeamento correto dos campos
                 frame_key = parts[0].strip()      # Índice 0: frame.number
                 size = int(parts[1]) if parts[1] else 0 # Índice 1: frame.len
-                proto = parts[2] if len(parts) > 2 else ""  # Índice 2: ip.proto
-                uri = parts[3] if len(parts) > 3 else ""    # Índice 3: http.request.uri
+                uri = parts[2] if len(parts) > 2 else ""    # Índice 3: http.request.uri
+                http_request_value = parts[3] if len(parts) > 3 else "" # index do header
                 http_response_value = parts[4] if len(parts) > 4 else "" # index do header
 
-                header_lines = http_response_value.split('\r\n,')
+                header_lines = http_request_value.split('\r\n,')
                 for line in header_lines:
-                    if ':' in line: 
-                        _, value = line.split(':', 1)
-                        value_clean = value.strip()
-                        frame_to_msg_type[frame_key] = value_clean
-                        print(frame_key, " has ", value_clean)
-
-                udp_port = parts[6] if len(parts) > 6 else "" # Índice 6: udp.port
+                    msg_type = retrieve_message_type(line)
+                    if msg_type: 
+                        frame_to_msg_type[frame_key] = msg_type
 
                 results["total_packets"] += 1
                 results["total_bytes"] += size
@@ -157,8 +156,8 @@ class TrafficAnalyzer:
                     results["udp_packets"] += 1
                     results["udp_bytes"] += size
                     # UDP on port 7000 is likely HELLO multicast
-                    if "7000" in udp_port:
-                        msg_type = "HELLO"
+                    # if "7000" in udp_port:
+                    msg_type = "HELLO"
 
                 elif proto == "6":  # TCP
                     results["tcp_packets"] += 1
@@ -358,6 +357,15 @@ def example_usage_in_simulation(net, drones, duration_sec: int = 300):
     """
     pass
 
+def retrieve_message_type(line):
+    match = re.search(r'X-Message-Type:\s*([^\\]+)', line)
+
+    if match:
+        # match.group(0) is the entire match (e.g., "X-Message-Type: DELTA")
+        # match.group(1) is the first capturing group (e.g., "DELTA")
+        return match.group(1).strip()
+    else:
+        return None
 
 # What you get from this approach:
 #

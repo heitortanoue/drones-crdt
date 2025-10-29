@@ -10,7 +10,7 @@
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 120,
+        "duration_sec": 30,
         "loss_rate_percent": 0,
         "mobility_model": "RandomWaypoint"
       },
