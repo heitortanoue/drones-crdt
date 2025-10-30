@@ -99,7 +99,8 @@ def send_locations(drones, stop_event):
         if stop_event.is_set():
             break
         for drone in drones:
-            send_drone_location(drone)
+            with drone.lock:
+                send_drone_location(drone)
 
 
 def fetch_stats(drone):
