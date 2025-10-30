@@ -30,7 +30,7 @@
         "loss_rate_percent": 0,
         "mobility_model": "RandomWaypoint"
       },
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "fanout_sweep_N10_F4",

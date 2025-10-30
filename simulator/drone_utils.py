@@ -88,8 +88,7 @@ def send_drone_location(drone):
     command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
     -H 'Content-Type: application/json' \
     -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}'"""
-    with drone.lock:
-        drone.cmd(command).strip()
+    drone.cmd(command).strip()
 
 
 def send_locations(drones, stop_event):
