@@ -15,7 +15,7 @@ MOBILITY_MODEL = "TruncatedLevyWalk"  # Mobility model for the drones
 
 # Simulator configuration
 X_MAX, Y_MAX = 2500, 2500  # Size of the simulation area
-SIMULATION_MULTIPLIER = 20  # Speed multiplier for the simulation time
+SIMULATION_MULTIPLIER = 5  # Speed multiplier for the simulation time
 FETCH_INTERVAL = 4  # Interval in seconds to fetch drone states
 DELTA_PUSH_INTERVAL = 3  # Interval in seconds to push deltas to neighbors
 ANTI_ENTROPY_INTERVAL = 60  # Interval in seconds for anti-entropy
