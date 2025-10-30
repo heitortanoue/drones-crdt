@@ -4,14 +4,26 @@ Captures and analyzes packet-level metrics from Mininet-WiFi interfaces.
 """
 
 import json
-import subprocess
 import re
+import subprocess
 from pathlib import Path
 from typing import Dict, List
 
 
 class TrafficAnalyzer:
-    """Analyze network traffic using tcpdump/tshark."""
+    """
+    Analyze network traffic using tcpdump/tshark.
+
+    This class captures and analyzes packet-level metrics from Mininet-WiFi interfaces,
+    providing detailed statistics on UDP/TCP traffic, message types, and request/response patterns.
+
+    Main workflow:
+    1. start_capture() - Begin packet capture on drone interfaces
+    2. stop_capture() - Stop capture gracefully
+    3. analyze_pcap() - Parse captured packets and extract metrics
+    4. analyze_all() - Aggregate statistics across all drones
+    5. generate_summary_report() - Create human-readable summary
+    """
 
     def __init__(self, output_dir: str):
         self.output_dir = Path(output_dir)
@@ -24,13 +36,7 @@ class TrafficAnalyzer:
         interface = f"{drone.name}-wlan0"
         pcap_file = self.pcap_dir / f"{drone.name}.pcap"
 
-        # Capture both UDP (HELLO) and TCP (state sync) traffic
-        filter_expr = f"udp port {udp_port} or tcp port {tcp_port} "
-
-        cmd = (
-            f"tcpdump -i {interface} -w {pcap_file}"
-            #f"-s 65535 '{filter_expr}' 2>/dev/null &"
-        )
+        cmd = f"tcpdump -i {interface} -w {pcap_file}"
 
         drone.cmd(f'xterm -e "{cmd}" 2>/dev/null &')
         print(f"Started capture on {drone.name} -> {pcap_file}")
@@ -46,28 +52,36 @@ class TrafficAnalyzer:
         # Force kill any remaining processes
         drone.cmd(f"pkill -9 -f 'tcpdump -i {drone.name}-wlan0'")
 
-    def analyze_pcap(self, drone_name: str) -> Dict:
-        """
-        Analyze captured pcap file using tshark.
-        Returns breakdown of traffic by type, sizes, counts.
-        Extracts custom headers to identify message types.
-        """
-        pcap_file = self.pcap_dir / f"{drone_name}.pcap"
+    def _validate_pcap_file(self, pcap_file: Path) -> bool:
+        """Validate that pcap file exists and is not corrupted."""
         if not pcap_file.exists():
-            return {}
+            return False
 
-        # Check if file is empty or very small (likely corrupted)
         file_size = pcap_file.stat().st_size
         if file_size == 0:
             print(f"Warning: {pcap_file} is empty, skipping analysis")
-            return {}
+            return False
         if file_size < 24:  # Minimum pcap header size
             print(
                 f"Warning: {pcap_file} is too small ({file_size} bytes), likely corrupted"
             )
-            return {}
+            return False
 
-        results = {
+        return True
+
+    def _initialize_results(self) -> Dict:
+        """Initialize the results dictionary structure."""
+        message_types = [
+            "DELTA",
+            "ANTI-ENTROPY",
+            "STATE",
+            "STATS",
+            "POSITION",
+            "HELLO",
+            "UNKNOWN",
+        ]
+
+        return {
             "total_packets": 0,
             "total_bytes": 0,
             "udp_packets": 0,
@@ -76,26 +90,88 @@ class TrafficAnalyzer:
             "tcp_bytes": 0,
             "avg_packet_size": 0,
             "packet_sizes": [],
-            # Message type breakdown from custom headers
             "by_message_type": {
-                "DELTA": {"count": 0, "bytes": 0},
-                "ANTI-ENTROPY": {"count": 0, "bytes": 0},
-                "STATE": {"count": 0, "bytes": 0},
-                "STATS": {"count": 0, "bytes": 0},
-                "POSITION": {"count": 0, "bytes": 0},
-                "HELLO": {"count": 0, "bytes": 0},  # UDP multicast
-                "UNKNOWN": {"count": 0, "bytes": 0},
+                msg_type: {
+                    "count": 0,
+                    "bytes": 0,
+                    "requests": 0,
+                    "responses": 0,
+                    "percentage_unresponded": 0.0,
+                }
+                for msg_type in message_types
             },
         }
 
-        # Get packet details including HTTP headers
-        # For custom headers, we need to use http.request.line or parse the full HTTP data
-        cmd = [
+    def analyze_pcap(self, drone_name: str) -> Dict:
+        """
+        Analyze captured pcap file using tshark.
+        Returns breakdown of traffic by type, sizes, counts.
+        Extracts custom headers to identify message types.
+        """
+        pcap_file = self.pcap_dir / f"{drone_name}.pcap"
+
+        if not self._validate_pcap_file(pcap_file):
+            return {}
+
+        results = self._initialize_results()
+
+        # Analyze UDP and HTTP/TCP packets
+        self._analyze_udp_packets(pcap_file, results)
+        self._analyze_http_packets(pcap_file, results)
+
+        # Finalize calculations
+        self._calculate_statistics(results)
+
+        return results
+
+    def _analyze_udp_packets(self, pcap_file: Path, results: Dict):
+        """Analyze UDP packets from pcap file."""
+        udp_cmd = [
             "tshark",
             "-r",
             str(pcap_file),
             "-Y",
-            "http",  # Filter for HTTP and UDP
+            "udp",
+            "-T",
+            "fields",
+            "-e",
+            "frame.number",
+            "-e",
+            "frame.len",
+            "-E",
+            "separator=|",
+        ]
+
+        try:
+            result = subprocess.run(udp_cmd, capture_output=True, text=True, check=True)
+
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+
+                parts = line.split("|")
+                if len(parts) < 2:
+                    continue
+
+                size = int(parts[1]) if parts[1] else 0
+
+                # Update global counters
+                self._update_packet_stats(results, size, is_udp=True)
+
+                # UDP packets are HELLO multicast
+                self._update_message_type_stats(results, "HELLO", size, is_request=True)
+
+        except subprocess.CalledProcessError:
+            print(f"Warning: Could not analyze UDP packets in {pcap_file}")
+
+    def _analyze_http_packets(self, pcap_file: Path, results: Dict):
+        """Analyze HTTP/TCP packets from pcap file."""
+        http_cmd = [
+            "tshark",
+            "-r",
+            str(pcap_file),
+            "-Y",
+            "http",
             "-T",
             "fields",
             "-e",
@@ -108,122 +184,160 @@ class TrafficAnalyzer:
             "http.request.line",
             "-e",
             "http.response.line",
-            # "-e",
-            # "http.request.method",
-            # "-e",
-            # "udp.port",
-            # "-e",
-            # "http.file_data",
             "-E",
             "separator=|",
         ]
 
         try:
-            # Capture stderr to see actual errors instead of hiding them
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            output = result.stdout
-            frame_to_msg_type = {}
-            frame_num = 0
-            for line in output.strip().split("\n"):
+            result = subprocess.run(
+                http_cmd, capture_output=True, text=True, check=True
+            )
+            frame_metadata = self._extract_frame_metadata(result.stdout)
+
+            for line in result.stdout.strip().split("\n"):
                 if not line:
                     continue
-                frame_num += 1
+
                 parts = line.split("|")
                 if len(parts) < 2:
                     continue
 
-                # Mapeamento correto dos campos
-                frame_key = parts[0].strip()      # Índice 0: frame.number
-                size = int(parts[1]) if parts[1] else 0 # Índice 1: frame.len
-                uri = parts[2] if len(parts) > 2 else ""    # Índice 3: http.request.uri
-                http_request_value = parts[3] if len(parts) > 3 else "" # index do header
-                http_response_value = parts[4] if len(parts) > 4 else "" # index do header
+                frame_key = parts[0].strip()
+                size = int(parts[1]) if parts[1] else 0
 
-                header_lines = http_request_value.split('\r\n,')
-                for line in header_lines:
-                    msg_type = retrieve_message_type(line)
-                    if msg_type: 
-                        frame_to_msg_type[frame_key] = msg_type
+                # Update global counters
+                self._update_packet_stats(results, size, is_udp=False)
 
-                results["total_packets"] += 1
-                results["total_bytes"] += size
-                results["packet_sizes"].append(size)
+                # Get message type and response status from custom headers only
+                msg_type = frame_metadata.get(frame_key, {}).get("msg_type", "UNKNOWN")
+                is_response = frame_metadata.get(frame_key, {}).get(
+                    "is_response", False
+                )
 
-                # Determine message type
-                msg_type = "UNKNOWN"
-
-                if proto == "17":  # UDP
-                    results["udp_packets"] += 1
-                    results["udp_bytes"] += size
-                    # UDP on port 7000 is likely HELLO multicast
-                    # if "7000" in udp_port:
-                    msg_type = "HELLO"
-
-                elif proto == "6":  # TCP
-                    results["tcp_packets"] += 1
-                    results["tcp_bytes"] += size
-                    
-                    if frame_key in frame_to_msg_type:
-                        msg_type = frame_to_msg_type[frame_key]
-                    # Fallback to URI inspection
-                    elif "/delta" in uri:
-                        # Check if it's DELTA or ANTI-ENTROPY (both use /delta endpoint)
-                        msg_type = "DELTA"  # Will be overridden by header if available
-                    elif "/state" in uri:
-                        msg_type = "STATE"
-                    elif "/stats" in uri:
-                        msg_type = "STATS"
-                    elif "/position" in uri:
-                        msg_type = "POSITION"
-
-                # Atualizar contadores
-                if msg_type in results["by_message_type"]:
-                    results["by_message_type"][msg_type]["count"] += 1
-                    results["by_message_type"][msg_type]["bytes"] += size
-                else:
-                    results["by_message_type"]["UNKNOWN"]["count"] += 1
-                    results["by_message_type"]["UNKNOWN"]["bytes"] += size
-
-            if results["total_packets"] > 0:
-                results["avg_packet_size"] = (
-                    results["total_bytes"] / results["total_packets"]
+                # Update message type statistics
+                self._update_message_type_stats(
+                    results, msg_type, size, is_request=not is_response
                 )
 
         except subprocess.CalledProcessError as e:
-            stderr_msg = e.stderr if hasattr(e, "stderr") and e.stderr else ""
+            self._handle_pcap_error(pcap_file, e)
 
-            if (
-                "cut short" in stderr_msg
-                or "appears to have been cut short" in stderr_msg
-            ):
-                print(
-                    f"Warning: {pcap_file.name} was corrupted (cut short), attempting recovery..."
-                )
-                try:
-                    simple_cmd = [
-                        "tshark",
-                        "-r",
-                        str(pcap_file),
-                        "-q",
-                        "-z",
-                        "io,stat,0",
-                    ]
-                    result = subprocess.run(simple_cmd, capture_output=True, text=True)
-                    if "captured" in result.stdout:
-                        print(
-                            f"  File partially readable but too corrupted for detailed analysis"
-                        )
-                except:
-                    pass
+    def _extract_frame_metadata(self, tshark_output: str) -> Dict:
+        """Extract message type and request/response status from HTTP headers."""
+        frame_metadata = {}
+
+        for line in tshark_output.strip().split("\n"):
+            if not line:
+                continue
+
+            parts = line.split("|")
+            if len(parts) < 4:
+                continue
+
+            frame_key = parts[0].strip()
+            http_request_value = parts[3] if len(parts) > 3 else ""
+            http_response_value = parts[4] if len(parts) > 4 else ""
+
+            # Process request headers
+            if http_request_value:
+                for header_line in http_request_value.split("\r\n,"):
+                    msg_type = retrieve_message_type(header_line)
+                    if msg_type:
+                        frame_metadata[frame_key] = {
+                            "msg_type": msg_type,
+                            "is_response": False,
+                        }
+                        break
+
+            # Process response headers (overrides request if both exist)
+            if http_response_value:
+                for header_line in http_response_value.split("\r\n,"):
+                    msg_type = retrieve_message_type(header_line)
+                    if msg_type:
+                        frame_metadata[frame_key] = {
+                            "msg_type": msg_type,
+                            "is_response": True,
+                        }
+                        break
+
+        return frame_metadata
+
+    def _update_packet_stats(self, results: Dict, size: int, is_udp: bool):
+        """Update global packet statistics."""
+        results["total_packets"] += 1
+        results["total_bytes"] += size
+        results["packet_sizes"].append(size)
+
+        if is_udp:
+            results["udp_packets"] += 1
+            results["udp_bytes"] += size
+        else:
+            results["tcp_packets"] += 1
+            results["tcp_bytes"] += size
+
+    def _update_message_type_stats(
+        self, results: Dict, msg_type: str, size: int, is_request: bool
+    ):
+        """Update message type specific statistics."""
+        if msg_type not in results["by_message_type"]:
+            msg_type = "UNKNOWN"
+
+        results["by_message_type"][msg_type]["count"] += 1
+        results["by_message_type"][msg_type]["bytes"] += size
+
+        if is_request:
+            results["by_message_type"][msg_type]["requests"] += 1
+        else:
+            results["by_message_type"][msg_type]["responses"] += 1
+
+    def _calculate_statistics(self, results: Dict):
+        """Calculate derived statistics like averages and percentages."""
+        # Calculate average packet size
+        if results["total_packets"] > 0:
+            results["avg_packet_size"] = (
+                results["total_bytes"] / results["total_packets"]
+            )
+
+        # Calculate percentage of unresponded requests for each message type
+        for msg_type, stats in results["by_message_type"].items():
+            if stats["requests"] > 0:
+                unresponded = stats["requests"] - stats["responses"]
+                stats["percentage_unresponded"] = (
+                    unresponded / stats["requests"]
+                ) * 100.0
             else:
-                print(f"Warning: Could not analyze {pcap_file}")
-                print(f"  Command: {' '.join(cmd)}")
-                print(f"  Error: {e}")
-                if stderr_msg:
-                    print(f"  Stderr: {stderr_msg}")
+                stats["percentage_unresponded"] = 0.0
 
-        return results
-    
+    def _handle_pcap_error(self, pcap_file: Path, error: subprocess.CalledProcessError):
+        """Handle errors when analyzing pcap files."""
+        stderr_msg = error.stderr if hasattr(error, "stderr") and error.stderr else ""
+
+        if "cut short" in stderr_msg or "appears to have been cut short" in stderr_msg:
+            print(
+                f"Warning: {pcap_file.name} was corrupted (cut short), attempting recovery..."
+            )
+            try:
+                simple_cmd = [
+                    "tshark",
+                    "-r",
+                    str(pcap_file),
+                    "-q",
+                    "-z",
+                    "io,stat,0",
+                ]
+                result = subprocess.run(simple_cmd, capture_output=True, text=True)
+                if "captured" in result.stdout:
+                    print(
+                        "  File partially readable but too corrupted for detailed analysis"
+                    )
+            except:
+                pass
+        else:
+            print(f"Warning: Could not analyze {pcap_file}")
+            print(f"  Error: {error}")
+            if stderr_msg:
+                print(f"  Stderr: {stderr_msg}")
+
     def analyze_all(self, drone_names: List[str]) -> Dict:
         """Analyze all drone pcaps and return aggregated stats."""
         all_stats = {}
@@ -338,27 +452,8 @@ class TrafficAnalyzer:
         return stats["total_bytes"] / duration_sec
 
 
-def example_usage_in_simulation(net, drones, duration_sec: int = 300):
-    """
-    Example of how to use traffic capture in your simulation.
-
-    Add this to your main.py:
-
-    1. After net.start():
-       analyzer = TrafficAnalyzer("metrics_output/current_run")
-       for drone in drones:
-           analyzer.start_capture(drone)
-
-    2. Before net.stop():
-       for drone in drones:
-           analyzer.stop_capture(drone)
-
-       stats = analyzer.analyze_all([d.name for d in drones])
-    """
-    pass
-
 def retrieve_message_type(line):
-    match = re.search(r'X-Message-Type:\s*([^\\]+)', line)
+    match = re.search(r"X-Message-Type:\s*([^\\]+)", line)
 
     if match:
         # match.group(0) is the entire match (e.g., "X-Message-Type: DELTA")
@@ -366,18 +461,3 @@ def retrieve_message_type(line):
         return match.group(1).strip()
     else:
         return None
-
-# What you get from this approach:
-#
-# ✓ Total bytes/packets sent per drone (ground truth)
-# ✓ UDP vs TCP breakdown (HELLO vs state sync)
-# ✓ Packet size distributions
-# ✓ Actual bandwidth utilization
-# ✓ Retransmission detection (TCP analysis)
-# ✓ Inter-packet timing (with -e frame.time_delta)
-#
-# Limitations:
-# ✗ Can't distinguish DELTA from AE messages (both use TCP)
-#   - Unless you add HTTP path inspection with tshark filters
-# ✗ No semantic info (delta IDs, hop counts, etc.)
-# ✗ Higher storage overhead than app-level logging
