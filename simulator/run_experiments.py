@@ -19,8 +19,6 @@ from config import (
     SIMULATION_MULTIPLIER,
     TCP_PORT,
     UDP_PORT,
-    X_MAX,
-    Y_MAX,
 )
 from drone_utils import send_locations, setup_topology
 from mininet.log import info, setLogLevel

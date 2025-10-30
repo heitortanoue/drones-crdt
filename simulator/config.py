@@ -11,7 +11,7 @@ DRONE_HEIGHT = 50  # Height of each drone in meters
 # For this simulation, we are considering an outdoors rural environment
 PROPAGATION_MODEL = "logDistance"  # Propagation model to use
 ATTENUATION = 4.5  # Attenuation exponent for the propagation model
-MOBILITY_MODEL = "GaussMarkov"  # Mobility model for the drones
+MOBILITY_MODEL = "TruncatedLevyWalk"  # Mobility model for the drones
 
 # Simulator configuration
 X_MAX, Y_MAX = 2500, 2500  # Size of the simulation area

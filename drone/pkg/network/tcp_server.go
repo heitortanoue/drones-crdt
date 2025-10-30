@@ -75,7 +75,12 @@ func (s *TCPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // Wrappers for external handlers (to be implemented in later phases)
 func (s *TCPServer) handleSensorWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "SENSOR")
+	// Preserve message type from request, default to "SENSOR" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "SENSOR"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.SensorHandler != nil {
 		s.SensorHandler(w, r)
@@ -85,7 +90,12 @@ func (s *TCPServer) handleSensorWrapper(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *TCPServer) handleDeltaWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "DELTA")
+	// Preserve message type from request, default to "DELTA" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "DELTA"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.DeltaHandler != nil {
 		s.DeltaHandler(w, r)
@@ -95,7 +105,12 @@ func (s *TCPServer) handleDeltaWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleStateWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "STATE")
+	// Preserve message type from request, default to "STATE" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "STATE"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.StateHandler != nil {
 		s.StateHandler(w, r)
@@ -105,7 +120,12 @@ func (s *TCPServer) handleStateWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleStatsWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "STATS")
+	// Preserve message type from request, default to "STATS" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "STATS"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.StatsHandler != nil {
 		s.StatsHandler(w, r)
@@ -115,7 +135,12 @@ func (s *TCPServer) handleStatsWrapper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "CLEANUP")
+	// Preserve message type from request, default to "CLEANUP" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "CLEANUP"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.CleanupHandler != nil {
 		s.CleanupHandler(w, r)
@@ -125,7 +150,12 @@ func (s *TCPServer) handleCleanupWrapper(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *TCPServer) handlePositionWrapper(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Message-Type", "POSITION")
+	// Preserve message type from request, default to "POSITION" if not present
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "POSITION"
+	}
+	w.Header().Set("X-Message-Type", msgType)
 	w.Header().Set("X-Drone-ID", s.droneID)
 	if s.PositionHandler != nil {
 		s.PositionHandler(w, r)
