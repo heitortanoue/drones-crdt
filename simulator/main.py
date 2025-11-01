@@ -12,6 +12,8 @@ from config import (
     TCP_PORT,
     TTL,
     UDP_PORT,
+    X_MAX,
+    Y_MAX,
     anti_entropy_interval,
     confidence_threshold,
     delta_push_interval,
@@ -67,6 +69,8 @@ def main():
             f"-hello-ms={int(hello_interval_ms)} "
             f"-hello-jitter-ms={int(hello_jitter_ms)} "
             f"-confidence-threshold={confidence_threshold} "
+            f"-max-x={X_MAX} "
+            f"-max-y={Y_MAX} "
         )
 
         drone.cmd(f'xterm -e "{command}" &')

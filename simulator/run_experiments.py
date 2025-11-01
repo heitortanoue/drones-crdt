@@ -209,6 +209,12 @@ class ExperimentRunner:
             params["anti_entropy_interval_sec"] / SIMULATION_MULTIPLIER
         )
 
+        # Get grid size from params or use defaults from config
+        from config import X_MAX, Y_MAX
+
+        max_x = params.get("max_x", X_MAX)
+        max_y = params.get("max_y", Y_MAX)
+
         for i, drone in enumerate(drones, 1):
             drone_id = f"drone-go-{i}"
             command = (
@@ -225,6 +231,8 @@ class ExperimentRunner:
                 f"-hello-ms=1000 "
                 f"-hello-jitter-ms=200 "
                 f"-confidence-threshold=50.0 "
+                f"-max-x={max_x} "
+                f"-max-y={max_y} "
                 f"> /tmp/{drone_id}.log 2>&1 &"
             )
             drone.cmd(command)

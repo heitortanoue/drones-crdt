@@ -37,6 +37,8 @@ func main() {
 		helloMs             = flag.Int("hello-ms", 1000, "Hello message base interval in milliseconds")
 		helloJitterMs       = flag.Int("hello-jitter-ms", 200, "Hello message jitter in milliseconds")
 		confidenceThreshold = flag.Float64("confidence-threshold", 50.0, "Minimum confidence threshold (0-100)")
+		maxX                = flag.Int("max-x", 2500, "Maximum X coordinate for grid size")
+		maxY                = flag.Int("max-y", 2500, "Maximum Y coordinate for grid size")
 		showUsage           = flag.Bool("help", false, "Show usage help")
 	)
 	flag.Parse()
@@ -60,6 +62,8 @@ func main() {
 	cfg.HelloInterval = time.Duration(*helloMs) * time.Millisecond
 	cfg.HelloJitter = time.Duration(*helloJitterMs) * time.Millisecond
 	cfg.ConfidenceThreshold = *confidenceThreshold
+	cfg.GridSize.X = *maxX
+	cfg.GridSize.Y = *maxY
 
 	// Neighbor table
 	neighborTable := network.NewNeighborTable(cfg.DroneID, cfg.NeighborTimeout)
@@ -182,9 +186,10 @@ EXAMPLES:
   %s -id=drone-2 -sample-ms=5000 -fanout=2 -ttl=3
   %s -id=drone-3 -udp-port=7001 -tcp-port=8081
   %s -id=drone-4 -delta-push-ms=3000 -anti-entropy-ms=30000
+  %s -id=drone-5 -max-x=5000 -max-y=5000
 
 OPTIONS:
-`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
+`, os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 
 	flag.PrintDefaults()
 
