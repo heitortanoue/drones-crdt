@@ -36,9 +36,9 @@ class TrafficAnalyzer:
         interface = f"{drone.name}-wlan0"
         pcap_file = self.pcap_dir / f"{drone.name}.pcap"
 
-        cmd = f"tcpdump -i {interface} -w {pcap_file}"
+        cmd = f"tcpdump -i {interface} -w {pcap_file} > /dev/null 2>&1 &"
 
-        drone.cmd(f'xterm -e "{cmd}" 2>/dev/null &')
+        drone.cmd(cmd)
         print(f"Started capture on {drone.name} -> {pcap_file}")
 
     def stop_capture(self, drone):

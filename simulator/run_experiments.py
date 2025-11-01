@@ -7,19 +7,15 @@ Runs experiments defined in experiments.json and collects comprehensive metrics.
 import csv
 import json
 import os
+import random
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from config import (
-    BIND_ADDR,
-    EXEC_PATH,
-    SIMULATION_MULTIPLIER,
-    TCP_PORT,
-    UDP_PORT,
-)
+from config import BIND_ADDR, EXEC_PATH, SIMULATION_MULTIPLIER, TCP_PORT, UDP_PORT
 from drone_utils import send_locations, setup_topology
 from mininet.log import info, setLogLevel
 from traffic_analyzer import TrafficAnalyzer
@@ -232,48 +228,72 @@ class ExperimentRunner:
             info(f"  Started {drone_id}\n")
 
     def _collect_metrics_loop(self, drones, stop_event, collector, sample_interval_sec):
-        """Main metrics collection loop."""
+        """Main metrics collection loop with parallel fetching."""
         iteration = 0
+        # Limit concurrent requests to avoid overwhelming drones
+        max_workers = min(10, len(drones))
 
-        while not stop_event.is_set():
-            stop_event.wait(sample_interval_sec)
-            if stop_event.is_set():
-                break
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            while not stop_event.is_set():
+                stop_event.wait(sample_interval_sec)
+                if stop_event.is_set():
+                    break
 
-            timestamp = time.time()
+                timestamp = time.time()
 
-            for drone in drones:
-                try:
-                    # Fetch stats from drone
-                    stats = self._fetch_drone_stats(drone)
-                    state = self._fetch_drone_state(drone)
-                    if stats:
-                        collector.record_metrics(drone.name, timestamp, stats, state)
-                except Exception as e:
-                    info(f"Error fetching stats from {drone.name}: {e}\n")
+                # Submit all drone fetches in parallel
+                futures = {
+                    executor.submit(self._fetch_drone_metrics, drone, timestamp): drone
+                    for drone in drones
+                }
 
-            iteration += 1
-            if iteration % 10 == 0:
-                info(f"  Collected {iteration} samples\n")
+                # Collect results as they complete
+                for future in as_completed(futures, timeout=sample_interval_sec * 0.8):
+                    drone = futures[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            stats, state = result
+                            if stats:
+                                collector.record_metrics(
+                                    drone.name, timestamp, stats, state
+                                )
+                    except Exception as e:
+                        # Error already logged in _fetch_drone_metrics
+                        pass
+
+                iteration += 1
+                if iteration % 10 == 0:
+                    info(f"  Collected {iteration} samples\n")
+
+    def _fetch_drone_metrics(self, drone, timestamp):
+        """Fetch both stats and state from a drone (for parallel execution)."""
+        try:
+            # Add small random jitter to avoid thundering herd
+            time.sleep(random.uniform(0, 0.1))
+            stats = self._fetch_drone_stats(drone)
+            state = self._fetch_drone_state(drone)
+            return (stats, state)
+        except Exception as e:
+            info(f"Error fetching metrics from {drone.name}: {e}\n")
+            return None
 
     def _fetch_drone_stats(self, drone) -> Dict:
         """Fetch comprehensive stats from a drone."""
-        cmd = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats"
-        response_str = drone.cmd(cmd).strip()
-
+        cmd = f"curl -s --max-time 2 http://{drone.IP()}:{TCP_PORT}/stats 2>/dev/null"
         try:
+            response_str = drone.cmd(cmd).strip()
             return json.loads(response_str)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, Exception):
             return None
 
     def _fetch_drone_state(self, drone) -> Dict:
         """Fetch state info from a drone."""
-        cmd = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state"
-        response_str = drone.cmd(cmd).strip()
-
+        cmd = f"curl -s --max-time 2 http://{drone.IP()}:{TCP_PORT}/state 2>/dev/null"
         try:
+            response_str = drone.cmd(cmd).strip()
             return json.loads(response_str)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, Exception):
             return None
 
     def _cleanup_drones(self):
