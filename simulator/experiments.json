@@ -1,36 +1,36 @@
 {
   "experiments": [
     {
-      "id": "baseline_N100_F3_T4",
-      "description": "Baseline experiment with 10 drones, fanout 3, TTL 4",
+      "id": "baseline_N64_F3_T4",
+      "description": "Baseline experiment with 64 drones, fanout 3, TTL 4",
       "parameters": {
-        "drone_count": 100,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 30,
+        "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": true
+      "enabled": false
     },
     {
-      "id": "fanout_sweep_N10_F2",
+      "id": "fanout_sweep_N64_F2",
       "description": "Fanout sensitivity - F=2",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 2,
         "ttl": 4,
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 60,
+        "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "fanout_sweep_N10_F4",
@@ -44,7 +44,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     },
@@ -60,7 +60,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     },
@@ -76,7 +76,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     },
@@ -124,7 +124,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 5,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     },
@@ -140,7 +140,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     },
@@ -156,7 +156,7 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "GaussMarkov"
       },
       "enabled": false
     }
