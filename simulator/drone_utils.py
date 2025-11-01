@@ -86,40 +86,56 @@ def setup_topology():
 def send_drone_location(drone):
     """Sends the current location of the drone to its Go application (non-blocking)."""
     try:
-        # Add small random jitter to spread out requests
-        time.sleep(random.uniform(0, 0.05))
         position = drone.position
-        # Run curl in background with & to make it non-blocking
+        # Ultra-lightweight: fire and forget with minimal overhead
+        # Use --connect-timeout and don't even wait for process to start
         command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
-        -H 'Content-Type: application/json' \
-        -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}' \
-        --max-time 2 >/dev/null 2>&1 &"""
-        drone.cmd(command)
-    except Exception as e:
-        # Silent failure - position updates are not critical
+-H 'Content-Type: application/json' \
+-d '{{"x": {int(position[0])}, "y": {int(position[1])}}}' \
+--max-time 1 --connect-timeout 1 >/dev/null 2>&1 &"""
+        # Start command but don't wait for it
+        drone.sendCmd(command)
+    except Exception:
         pass
 
 
 def send_locations(drones, stop_event):
-    """Sends the locations of all drones periodically with parallel execution."""
-    # Limit concurrent position updates to avoid overwhelming the network
-    max_workers = min(20, len(drones))
+    """
+    Sends locations with aggressive optimizations for large drone counts.
+    For 150+ drones, only updates a subset each interval to reduce load.
+    """
+    iteration = 0
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        while not stop_event.is_set():
-            stop_event.wait(FETCH_INTERVAL)
-            if stop_event.is_set():
-                break
+    while not stop_event.is_set():
+        stop_event.wait(FETCH_INTERVAL)
+        if stop_event.is_set():
+            break
 
-            # Send all positions in parallel
-            futures = [executor.submit(send_drone_location, drone) for drone in drones]
+        iteration += 1
 
-            # Wait for all to complete (with timeout)
-            try:
-                for future in as_completed(futures, timeout=FETCH_INTERVAL * 0.5):
-                    future.result()  # Retrieve result to catch any exceptions
-            except Exception:
-                pass  # Continue even if some position updates fail
+        # For large swarms (>50 drones), only update a subset each time
+        # This rotates through all drones over multiple intervals
+        if len(drones) > 50:
+            # Update 1/3 of drones each interval, rotating through them
+            chunk_size = max(30, len(drones) // 3)
+            start_idx = ((iteration - 1) * chunk_size) % len(drones)
+            end_idx = start_idx + chunk_size
+
+            if end_idx > len(drones):
+                # Wrap around
+                drones_to_update = drones[start_idx:] + drones[: end_idx - len(drones)]
+            else:
+                drones_to_update = drones[start_idx:end_idx]
+        else:
+            # Update all drones for small swarms
+            drones_to_update = drones
+
+        # Send positions without waiting - fire and forget
+        for i, drone in enumerate(drones_to_update):
+            # Tiny stagger to avoid exact simultaneous requests
+            if i % 10 == 0:
+                time.sleep(0.01)
+            send_drone_location(drone)
 
 
 def fetch_stats(drone):

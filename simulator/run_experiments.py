@@ -231,10 +231,10 @@ class ExperimentRunner:
             info(f"  Started {drone_id}\n")
 
     def _collect_metrics_loop(self, drones, stop_event, collector, sample_interval_sec):
-        """Main metrics collection loop with parallel fetching."""
+        """Main metrics collection loop with parallel fetching and adaptive sampling."""
         iteration = 0
-        # Limit concurrent requests to avoid overwhelming drones
-        max_workers = min(10, len(drones))
+        # Scale workers based on drone count - more workers for larger swarms
+        max_workers = min(30, max(10, len(drones) // 5))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while not stop_event.is_set():
@@ -244,14 +244,24 @@ class ExperimentRunner:
 
                 timestamp = time.time()
 
+                # For very large swarms (>100 drones), sample a subset to reduce load
+                if len(drones) > 100:
+                    # Collect from ~60% of drones per iteration, rotating through them
+                    import random as rand
+
+                    drones_to_sample = rand.sample(drones, k=int(len(drones) * 0.6))
+                else:
+                    drones_to_sample = drones
+
                 # Submit all drone fetches in parallel
                 futures = {
                     executor.submit(self._fetch_drone_metrics, drone, timestamp): drone
-                    for drone in drones
+                    for drone in drones_to_sample
                 }
 
                 # Collect results as they complete
-                for future in as_completed(futures, timeout=sample_interval_sec * 0.8):
+                completed = 0
+                for future in as_completed(futures, timeout=sample_interval_sec * 0.9):
                     drone = futures[future]
                     try:
                         result = future.result()
@@ -261,24 +271,25 @@ class ExperimentRunner:
                                 collector.record_metrics(
                                     drone.name, timestamp, stats, state
                                 )
-                    except Exception as e:
-                        # Error already logged in _fetch_drone_metrics
+                                completed += 1
+                    except Exception:
                         pass
 
                 iteration += 1
                 if iteration % 10 == 0:
-                    info(f"  Collected {iteration} samples\n")
+                    info(
+                        f"  Collected {iteration} samples ({completed}/{len(drones_to_sample)} drones)\n"
+                    )
 
     def _fetch_drone_metrics(self, drone, timestamp):
         """Fetch both stats and state from a drone (for parallel execution)."""
         try:
-            # Add small random jitter to avoid thundering herd
-            time.sleep(random.uniform(0, 0.1))
+            # Minimal jitter for large swarms
+            time.sleep(random.uniform(0, 0.05))
             stats = self._fetch_drone_stats(drone)
             state = self._fetch_drone_state(drone)
             return (stats, state)
-        except Exception as e:
-            info(f"Error fetching metrics from {drone.name}: {e}\n")
+        except Exception:
             return None
 
     def _fetch_drone_stats(self, drone) -> Dict:
