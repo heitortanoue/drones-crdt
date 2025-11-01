@@ -169,12 +169,15 @@ class ExperimentRunner:
 
         original_values = {
             "DRONE_NUMBER": config.DRONE_NUMBER,
+            "DRONE_NAMES": config.DRONE_NAMES,
             "SPEED": config.SPEED,
             "MOBILITY_MODEL": config.MOBILITY_MODEL,
         }
 
         config.DRONE_NUMBER = params["drone_count"]
         config.MOBILITY_MODEL = params.get("mobility_model", "GaussMarkov")
+        # Regenerate DRONE_NAMES based on new DRONE_NUMBER
+        config.DRONE_NAMES = [f"dr{i}" for i in range(1, params["drone_count"] + 1)]
 
         net, drones = setup_topology()
         net.build()
