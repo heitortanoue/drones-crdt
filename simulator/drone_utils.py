@@ -84,17 +84,16 @@ def setup_topology():
 
 
 def send_drone_location(drone):
-    """Sends the current location of the drone to its Go application (non-blocking)."""
+    """Sends the current location of the drone to its Go application."""
     try:
         position = drone.position
-        # Ultra-lightweight: fire and forget with minimal overhead
-        # Use --connect-timeout and don't even wait for process to start
+        # Lightweight fire-and-forget using background process
         command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
 -H 'Content-Type: application/json' \
 -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}' \
 --max-time 1 --connect-timeout 1 >/dev/null 2>&1 &"""
-        # Start command but don't wait for it
-        drone.sendCmd(command)
+        # Use cmd() with & at the end to run in background
+        drone.cmd(command)
     except Exception:
         pass
 
