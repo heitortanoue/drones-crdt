@@ -1,20 +1,22 @@
 import json
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Set
-import threading
 
 from config import (
     ATTENUATION,
     DRONE_HEIGHT,
     DRONE_NAMES,
     DRONE_RANGE,
+    FETCH_INTERVAL,
     MOBILITY_MODEL,
     PROPAGATION_MODEL,
     SPEED,
     TCP_PORT,
     X_MAX,
     Y_MAX,
-    FETCH_INTERVAL,
 )
 from mininet.log import info
 from mn_wifi.link import adhoc, wmediumd
@@ -51,7 +53,6 @@ def setup_topology():
             max_v=SPEED,
             **kwargs,
         )
-        drone.lock = threading.Lock()
         drones.append(drone)
 
     info("*** Configuring the signal propagation model ***\n")
@@ -83,32 +84,49 @@ def setup_topology():
 
 
 def send_drone_location(drone):
-    """Sends the current location of the drone to its Go application."""
-    position = drone.position
-    command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
-    -H 'Content-Type: application/json' \
-    -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}'"""
-    drone.cmd(command).strip()
+    """Sends the current location of the drone to its Go application (non-blocking)."""
+    try:
+        # Add small random jitter to spread out requests
+        time.sleep(random.uniform(0, 0.05))
+        position = drone.position
+        # Run curl in background with & to make it non-blocking
+        command = f"""curl -X POST http://{drone.IP()}:{TCP_PORT}/position \
+        -H 'Content-Type: application/json' \
+        -d '{{"x": {int(position[0])}, "y": {int(position[1])}}}' \
+        --max-time 2 >/dev/null 2>&1 &"""
+        drone.cmd(command)
+    except Exception as e:
+        # Silent failure - position updates are not critical
+        pass
 
 
 def send_locations(drones, stop_event):
-    """Sends the locations of all drones periodically."""
-    while not stop_event.is_set():
-        stop_event.wait(FETCH_INTERVAL)
-        if stop_event.is_set():
-            break
-        for drone in drones:
-            with drone.lock:
-                send_drone_location(drone)
+    """Sends the locations of all drones periodically with parallel execution."""
+    # Limit concurrent position updates to avoid overwhelming the network
+    max_workers = min(20, len(drones))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        while not stop_event.is_set():
+            stop_event.wait(FETCH_INTERVAL)
+            if stop_event.is_set():
+                break
+
+            # Send all positions in parallel
+            futures = [executor.submit(send_drone_location, drone) for drone in drones]
+
+            # Wait for all to complete (with timeout)
+            try:
+                for future in as_completed(futures, timeout=FETCH_INTERVAL * 0.5):
+                    future.result()  # Retrieve result to catch any exceptions
+            except Exception:
+                pass  # Continue even if some position updates fail
 
 
 def fetch_stats(drone):
-    command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/stats"
+    command = f"curl -s --max-time 2 http://{drone.IP()}:{TCP_PORT}/stats 2>/dev/null"
     try:
-        with drone.lock:
-            response_str = drone.cmd(command).strip()
+        response_str = drone.cmd(command).strip()
     except Exception as e:
-        info(f"-> ERROR for {drone.name}: Could not fetch stats. Try again <-\n")
         return None
 
     ## Parse the JSON response and log the specific fields.
@@ -118,14 +136,15 @@ def fetch_stats(drone):
 
     except json.JSONDecodeError as e:
         # Handle cases where the response is not valid JSON
-        info(f"-> ERROR for {drone.name}: Could not parse JSON response <-\n")
-        info(f"   Problematic response: {response_str}\n")
+        return None
 
 
 def fetch_state(drone):
-    command = f"curl -s --max-time 5 http://{drone.IP()}:{TCP_PORT}/state"
-    with drone.lock:
+    command = f"curl -s --max-time 2 http://{drone.IP()}:{TCP_PORT}/state 2>/dev/null"
+    try:
         response_str = drone.cmd(command).strip()
+    except Exception as e:
+        return None, None, []
 
     ## Parse the JSON response and log the specific fields.
     try:
@@ -205,7 +224,9 @@ def fetch_states(drones, stop_event, csv_writers):
         info(f"--- Repetition {repetitions}: Convergence = {convergence:.4f} ---\n")
         if convergence == 1.0:
             info("-> All drones have converged! <-\n")
-            info(f"-> Convergence achieved after {repetitions * FETCH_INTERVAL} seconds <-\n")
+            info(
+                f"-> Convergence achieved after {repetitions * FETCH_INTERVAL} seconds <-\n"
+            )
 
 
 def jaccard_index(set1: Set, set2: Set) -> float:

@@ -1,42 +1,42 @@
 {
   "experiments": [
     {
-      "id": "baseline_N100_F3_T4",
-      "description": "Baseline experiment with 10 drones, fanout 3, TTL 4",
+      "id": "baseline_N64_F3_T4",
+      "description": "Baseline experiment with 64 drones, fanout 3, TTL 4",
       "parameters": {
-        "drone_count": 100,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 30,
+        "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": true
+      "enabled": false
     },
     {
-      "id": "fanout_sweep_N10_F2",
+      "id": "fanout_sweep_N64_F2",
       "description": "Fanout sensitivity - F=2",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 2,
         "ttl": 4,
         "delta_push_interval_sec": 3,
         "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
-        "duration_sec": 60,
+        "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
       "enabled": false
     },
     {
-      "id": "fanout_sweep_N10_F4",
+      "id": "fanout_sweep_N64_F4",
       "description": "Fanout sensitivity - F=4",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 4,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -44,15 +44,15 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
       "enabled": false
     },
     {
-      "id": "ttl_sweep_N10_T3",
+      "id": "ttl_sweep_N64_T3",
       "description": "TTL sensitivity - T=3",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 3,
         "delta_push_interval_sec": 3,
@@ -60,15 +60,15 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
       "enabled": false
     },
     {
-      "id": "ttl_sweep_N10_T6",
+      "id": "ttl_sweep_N64_T6",
       "description": "TTL sensitivity - T=6",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 6,
         "delta_push_interval_sec": 3,
@@ -76,9 +76,9 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "scaling_N16_F3_T4",
@@ -113,10 +113,10 @@
       "enabled": false
     },
     {
-      "id": "loss_test_N10_L5",
+      "id": "loss_test_N64_L5",
       "description": "Network loss test - 5% packet loss",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -129,10 +129,10 @@
       "enabled": false
     },
     {
-      "id": "delta_interval_test_N10_D1",
+      "id": "delta_interval_test_N64_D1",
       "description": "Fast delta push - every 1 second",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 1,
@@ -145,10 +145,10 @@
       "enabled": false
     },
     {
-      "id": "ae_interval_test_N10_AE30",
+      "id": "ae_interval_test_N64_AE30",
       "description": "Frequent anti-entropy - every 30 seconds",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,

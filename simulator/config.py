@@ -1,6 +1,6 @@
 # Drone setup configuration file
 # Adjust parameters here to change the simulation setup
-DRONE_NUMBER = 10
+DRONE_NUMBER = 64
 DRONE_SPEED = 20  # Maximum speed of each drone in m/s
 DRONE_RANGE = 300  # Communication range of each drone in meters
 DRONE_HEIGHT = 50  # Height of each drone in meters
@@ -11,16 +11,16 @@ DRONE_HEIGHT = 50  # Height of each drone in meters
 # For this simulation, we are considering an outdoors rural environment
 PROPAGATION_MODEL = "logDistance"  # Propagation model to use
 ATTENUATION = 4.5  # Attenuation exponent for the propagation model
-MOBILITY_MODEL = "TruncatedLevyWalk"  # Mobility model for the drones
+MOBILITY_MODEL = "RandomDirection"  # Mobility model for the drones
 
 # Simulator configuration
-X_MAX, Y_MAX = 2500, 2500  # Size of the simulation area
-SIMULATION_MULTIPLIER = 5  # Speed multiplier for the simulation time
-FETCH_INTERVAL = 4  # Interval in seconds to fetch drone states
+X_MAX, Y_MAX = 1650, 1650  # Size of the simulation area
+SIMULATION_MULTIPLIER = 1  # Speed multiplier for the simulation time
+FETCH_INTERVAL = 5  # Interval in seconds to fetch drone states
 DELTA_PUSH_INTERVAL = 3  # Interval in seconds to push deltas to neighbors
 ANTI_ENTROPY_INTERVAL = 60  # Interval in seconds for anti-entropy
 BIND_ADDR = "0.0.0.0"  # Address to bind the drone application
-TTL = 4  # Time-to-live for gossip messages
+TTL = 6  # Time-to-live for gossip messages
 FANOUT = 3  # Number of neighbors to gossip with
 
 # Sensor configuration
@@ -30,7 +30,7 @@ CONFIDENCE_THRESHOLD = (
 )
 
 # Network timeouts
-NEIGHBOR_TIMEOUT_SEC = 5  # Neighbor timeout in seconds
+NEIGHBOR_TIMEOUT_SEC = 3  # Neighbor timeout in seconds
 TRANSMITTER_TIMEOUT_SEC = 3  # Transmitter timeout in seconds
 
 # Control protocol configuration

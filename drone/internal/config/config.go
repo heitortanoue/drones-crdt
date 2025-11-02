@@ -50,6 +50,6 @@ func DefaultConfig() *DroneConfig {
 		HelloInterval:       1000 * time.Millisecond,  // 1 second base interval
 		HelloJitter:         200 * time.Millisecond,   // ±200ms jitter
 		ConfidenceThreshold: 50.0,                     // 50% minimum confidence
-		GridSize:            GridSize{X: 2500, Y: 2500},
+		GridSize:            GridSize{X: 1650, Y: 1650},
 	}
 }
