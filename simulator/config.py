@@ -20,7 +20,7 @@ FETCH_INTERVAL = 5  # Interval in seconds to fetch drone states
 DELTA_PUSH_INTERVAL = 3  # Interval in seconds to push deltas to neighbors
 ANTI_ENTROPY_INTERVAL = 60  # Interval in seconds for anti-entropy
 BIND_ADDR = "0.0.0.0"  # Address to bind the drone application
-TTL = 4  # Time-to-live for gossip messages
+TTL = 6  # Time-to-live for gossip messages
 FANOUT = 3  # Number of neighbors to gossip with
 
 # Sensor configuration
