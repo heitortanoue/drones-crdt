@@ -175,10 +175,25 @@ def fetch_state(drone):
         return None, None, []
 
 
-def fetch_states(drones, stop_event, csv_writers):
-    """Fetches and logs the state of the drones periodically."""
+def fetch_states(drones, stop_event, csv_writers, convergence_metrics=None):
+    """Fetches and logs the state of the drones periodically.
+
+    Args:
+        drones: List of drone objects
+        stop_event: Threading event to signal stopping
+        csv_writers: Dictionary of CSV writers for each drone
+        convergence_metrics: Optional dict to store convergence timing metrics
+    """
     repetitions = 0
     convergence = 0.0
+    start_time = time.time()
+    time_to_90 = None
+    time_to_99 = None
+    time_to_100 = None
+    reached_90 = False
+    reached_99 = False
+    reached_100 = False
+
     while not stop_event.is_set():
         stop_event.wait(FETCH_INTERVAL)
         if stop_event.is_set():
@@ -221,12 +236,55 @@ def fetch_states(drones, stop_event, csv_writers):
         # Check for convergence
         repetitions += 1
         convergence = convergence_index(drone_delta_sets)
-        info(f"--- Repetition {repetitions}: Convergence = {convergence:.4f} ---\n")
-        if convergence == 1.0:
-            info("-> All drones have converged! <-\n")
-            info(
-                f"-> Convergence achieved after {repetitions * FETCH_INTERVAL} seconds <-\n"
-            )
+        elapsed_time = time.time() - start_time
+
+        # Track time-to-90% convergence
+        if not reached_90 and convergence >= 0.90:
+            time_to_90 = elapsed_time
+            reached_90 = True
+            info(f"-> 90% convergence reached at {time_to_90:.2f} seconds <-\n")
+
+        # Track time-to-99% convergence
+        if not reached_99 and convergence >= 0.99:
+            time_to_99 = elapsed_time
+            reached_99 = True
+            info(f"-> 99% convergence reached at {time_to_99:.2f} seconds <-\n")
+
+        # Track time-to-100% convergence
+        if not reached_100 and convergence == 1.0:
+            time_to_100 = elapsed_time
+            reached_100 = True
+            info("-> All drones have converged to 100%! <-\n")
+            info(f"-> Full convergence achieved after {time_to_100:.2f} seconds <-\n")
+
+        info(
+            f"--- Repetition {repetitions}: Convergence = {convergence:.4f} (t={elapsed_time:.2f}s) ---\n"
+        )
+
+    # Store convergence metrics if dict was provided
+    if convergence_metrics is not None:
+        convergence_metrics["time_to_90"] = time_to_90
+        convergence_metrics["time_to_99"] = time_to_99
+        convergence_metrics["time_to_100"] = time_to_100
+        convergence_metrics["final_convergence"] = convergence
+        convergence_metrics["total_repetitions"] = repetitions
+        convergence_metrics["total_time"] = time.time() - start_time
+
+        info("\n=== CONVERGENCE SUMMARY ===\n")
+        if time_to_90:
+            info(f"Time-to-90%: {time_to_90:.2f}s\n")
+        else:
+            info("Time-to-90%: Not reached\n")
+        if time_to_99:
+            info(f"Time-to-99%: {time_to_99:.2f}s\n")
+        else:
+            info("Time-to-99%: Not reached\n")
+        if time_to_100:
+            info(f"Time-to-100%: {time_to_100:.2f}s\n")
+        else:
+            info("Time-to-100%: Not reached\n")
+        info(f"Final convergence: {convergence:.4f}\n")
+        info("===========================\n")
 
 
 def jaccard_index(set1: Set, set2: Set) -> float:

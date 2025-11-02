@@ -63,6 +63,12 @@ class DroneControlPanel:
         )
         self.stats_button.pack(side="left", padx=10)
 
+        # Create Reading button
+        self.create_reading_button = ttk.Button(
+            button_frame, text="Create Reading", command=self.create_sensor_reading
+        )
+        self.create_reading_button.pack(side="left", padx=10)
+
         # 3. Scrollable Text widget for JSON display
         text_frame = ttk.Frame(main_frame)
         text_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky="nsew")
@@ -239,6 +245,100 @@ class DroneControlPanel:
             self.display_text(
                 f"Error: Could not parse JSON response\n\n{response_str}", color="red"
             )
+
+    def create_sensor_reading(self):
+        """Creates a sensor reading by opening a dialog to get x, y coordinates."""
+        import time
+
+        from config import TCP_PORT
+
+        drone = self.get_selected_drone()
+        if not drone:
+            self.display_text("Error: No drone selected.", color="red")
+            return
+
+        # Create a dialog window
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Create Sensor Reading")
+        dialog.geometry("300x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        # Create input fields
+        ttk.Label(dialog, text="X Coordinate:", font=("Helvetica", 10)).pack(pady=5)
+        x_entry = ttk.Entry(dialog, font=("Helvetica", 10))
+        x_entry.pack(pady=5)
+        x_entry.insert(0, "0")
+
+        ttk.Label(dialog, text="Y Coordinate:", font=("Helvetica", 10)).pack(pady=5)
+        y_entry = ttk.Entry(dialog, font=("Helvetica", 10))
+        y_entry.pack(pady=5)
+        y_entry.insert(0, "0")
+
+        ttk.Label(dialog, text="Confidence (0-100):", font=("Helvetica", 10)).pack(
+            pady=5
+        )
+        confidence_entry = ttk.Entry(dialog, font=("Helvetica", 10))
+        confidence_entry.pack(pady=5)
+        confidence_entry.insert(0, "75.0")
+
+        result_label = ttk.Label(dialog, text="", font=("Helvetica", 9))
+        result_label.pack(pady=5)
+
+        def submit_reading():
+            try:
+                x_val = int(x_entry.get())
+                y_val = int(y_entry.get())
+                confidence_val = float(confidence_entry.get())
+
+                if not (0 <= confidence_val <= 100):
+                    result_label.config(
+                        text="Confidence must be between 0 and 100", foreground="red"
+                    )
+                    return
+
+                # Create the sensor reading JSON payload
+                reading_data = {
+                    "x": x_val,
+                    "y": y_val,
+                    "timestamp": int(time.time() * 1000),  # milliseconds
+                    "confidence": confidence_val,
+                }
+
+                # Send POST request to /sensor endpoint
+                json_payload = json.dumps(reading_data)
+                command = f"curl -s --max-time 5 -X POST -H 'Content-Type: application/json' -d '{json_payload}' http://{drone.IP()}:{TCP_PORT}/sensor"
+                response_str = drone.cmd(command).strip()
+
+                try:
+                    response = json.loads(response_str)
+                    self.display_json(json.dumps(response, indent=2))
+                    result_label.config(
+                        text="Reading created successfully!", foreground="green"
+                    )
+                    dialog.after(1500, dialog.destroy)
+                except json.JSONDecodeError:
+                    self.display_text(
+                        f"Error: Could not parse response\n\n{response_str}",
+                        color="red",
+                    )
+                    result_label.config(text="Error sending reading", foreground="red")
+
+            except ValueError as e:
+                result_label.config(text=f"Invalid input: {str(e)}", foreground="red")
+
+        # Submit button
+        submit_button = ttk.Button(dialog, text="Submit", command=submit_reading)
+        submit_button.pack(pady=10)
+
+        # Bind Enter key to submit
+        dialog.bind("<Return>", lambda e: submit_reading())
 
 
 def setup_UI(drones):
