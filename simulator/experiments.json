@@ -1,14 +1,14 @@
 {
   "experiments": [
     {
-      "id": "baseline_F3_T4_AE8",
-      "description": "Baseline: Fanout 3, TTL 4, Anti-entropy 8s",
+      "id": "baseline_F3_T4_AE60",
+      "description": "Baseline: Fanout 3, TTL 4, Anti-entropy 60s",
       "parameters": {
         "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 8,
+        "anti_entropy_interval_sec": 60,
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
