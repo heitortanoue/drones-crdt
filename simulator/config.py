@@ -17,14 +17,14 @@ MOBILITY_MODEL = "RandomDirection"  # Mobility model for the drones
 X_MAX, Y_MAX = 1650, 1650  # Size of the simulation area
 SIMULATION_MULTIPLIER = 1  # Speed multiplier for the simulation time
 FETCH_INTERVAL = 5  # Interval in seconds to fetch drone states
-DELTA_PUSH_INTERVAL = 3  # Interval in seconds to push deltas to neighbors
-ANTI_ENTROPY_INTERVAL = 60  # Interval in seconds for anti-entropy
+DELTA_PUSH_INTERVAL = 1  # Interval in seconds to push deltas to neighbors
+ANTI_ENTROPY_INTERVAL = 30  # Interval in seconds for anti-entropy
 BIND_ADDR = "0.0.0.0"  # Address to bind the drone application
-TTL = 6  # Time-to-live for gossip messages
+TTL = 16  # Time-to-live for gossip messages
 FANOUT = 3  # Number of neighbors to gossip with
 
 # Sensor configuration
-SAMPLE_INTERVAL_SECONDS = 10  # Interval in seconds between sensor samples
+SAMPLE_INTERVAL_SECONDS = -1  # Interval in seconds between sensor samples
 CONFIDENCE_THRESHOLD = (
     50.0  # Minimum confidence threshold (0-100) to accept fire detection
 )
@@ -45,11 +45,6 @@ OUTPUT_DIR = "drone_execution_data/"  # Directory for telemetry logs
 SPEED = DRONE_SPEED * SIMULATION_MULTIPLIER
 TCP_PORT = 8080
 UDP_PORT = 7000
-DRONE_NAMES = [f"dr{i}" for i in range(1, DRONE_NUMBER + 1)]
-DRONE_IPs = {
-    f"http://10.{(i >> 8) & 0xff}.{i & 0xff}.0:{TCP_PORT}": name
-    for i, name in enumerate(DRONE_NAMES, 1)
-}
 
 delta_push_interval = (
     DELTA_PUSH_INTERVAL / SIMULATION_MULTIPLIER

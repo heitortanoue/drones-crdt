@@ -209,7 +209,7 @@ def plot_experiment_timeseries(experiment_dir: Path, metric: str = "active_eleme
     plt.xlabel("Time (seconds)")
     plt.ylabel(metric.replace("_", " ").title())
     plt.title(f"{metric} Over Time - {experiment_dir.parent.name}")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    # plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
@@ -271,7 +271,7 @@ def plot_drone_positions(experiment_dir: Path):
     ax1.set_xlabel("X Position")
     ax1.set_ylabel("Y Position")
     ax1.set_title(f"Drone Trajectories - {experiment_dir.parent.name}")
-    ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
+    # ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
     ax1.grid(True, alpha=0.3)
     ax1.set_aspect("equal")
 

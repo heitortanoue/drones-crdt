@@ -38,6 +38,7 @@ class ExperimentRunner:
         """Load experiment configurations from JSON file."""
         with open(self.experiments_file, "r") as f:
             data = json.load(f)
+            print(data)
         return [exp for exp in data["experiments"] if exp.get("enabled", True)]
 
     def run_all_experiments(self):
@@ -175,12 +176,24 @@ class ExperimentRunner:
             "DRONE_NUMBER": config.DRONE_NUMBER,
             "SPEED": config.SPEED,
             "MOBILITY_MODEL": config.MOBILITY_MODEL,
+            "DRONE_SPEED": config.DRONE_SPEED,
+            "DRONE_RANGE": config.DRONE_RANGE,
+            "ATTENUATION": config.ATTENUATION,
         }
 
         config.DRONE_NUMBER = params["drone_count"]
         config.MOBILITY_MODEL = params.get("mobility_model", "GaussMarkov")
+        config.DRONE_SPEED = params.get("drone_speed", 20)
+        config.DRONE_RANGE = params.get("drone_range", 300)
+        config.ATTENUATION = params.get("attenuation_exponent", 4.5)
 
-        net, drones = setup_topology()
+        net, drones = setup_topology(
+            config.DRONE_NUMBER, 
+            config.MOBILITY_MODEL,
+            config.DRONE_SPEED,
+            config.DRONE_RANGE,
+            config.ATTENUATION,
+        )
         net.build()
         net.start()
 

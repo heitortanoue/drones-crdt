@@ -6,12 +6,8 @@ from datetime import datetime
 from typing import List, Set
 
 from config import (
-    ATTENUATION,
     DRONE_HEIGHT,
-    DRONE_NAMES,
-    DRONE_RANGE,
     FETCH_INTERVAL,
-    MOBILITY_MODEL,
     PROPAGATION_MODEL,
     SPEED,
     TCP_PORT,
@@ -24,7 +20,12 @@ from mn_wifi.net import Mininet_wifi
 from mn_wifi.wmediumdConnector import interference
 
 
-def setup_topology():
+def setup_topology(DRONE_NUMBER, MOBILITY_MODEL, DRONE_SPEED, DRONE_RANGE, ATTENUATION):
+    DRONE_NAMES = [f"dr{i}" for i in range(1, DRONE_NUMBER + 1)]
+    DRONE_IPs = {
+        f"http://10.{(i >> 8) & 0xff}.{i & 0xff}.0:{TCP_PORT}": name
+        for i, name in enumerate(DRONE_NAMES, 1)
+    }
     """Creates and configures the network topology for the drone simulation."""
     info("--- Creating a Go drone network with Mininet-WiFi ---\n")
     drones = []
@@ -49,8 +50,8 @@ def setup_topology():
             max_x=X_MAX,
             min_y=0,
             max_y=Y_MAX,
-            min_v=0.8 * SPEED,
-            max_v=SPEED,
+            min_v=0.8 * DRONE_SPEED,
+            max_v=DRONE_SPEED,
             **kwargs,
         )
         drones.append(drone)

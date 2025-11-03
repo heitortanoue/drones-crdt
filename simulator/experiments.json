@@ -1,42 +1,10 @@
 {
   "experiments": [
     {
-      "id": "baseline_F3_T4_AE8",
-      "description": "Baseline: Fanout 3, TTL 4, Anti-entropy 8s",
+      "id": "exp-00_baseline_N32_S20_R300_A4.5_L0_GM",
+      "description": "Baseline: N=32, Speed=20, Range=300, Att=4.5, Loss=0%, Fanout=3, TTL=4, Delta=3, AE=60, Sample=10, Area=1650, H=50",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 8,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
-    },
-    {
-      "id": "baseline_no_ae",
-      "description": "Baseline with no anti-entropy",
-      "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
-    },
-    {
-      "id": "baseline_ae60",
-      "description": "Baseline with 60s anti-entropy (anti-entropy fanout = 1)",
-      "parameters": {
-        "drone_count": 64,
+        "drone_count": 32,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -44,153 +12,335 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
+        "mobility_model": "GaussMarkov",
+        "drone_speed": 20,
+        "drone_range": 300,
+        "attenuation_exponent": 4.5,
+        "x_max": 1650,
+        "y_max": 1650,
+        "drone_height": 50
       },
-      "enabled": true
+      "enabled": false
     },
     {
-      "id": "ttl8_f3_no_ae",
-      "description": "TTL 8, Fanout 3, no anti-entropy",
+      "id": "exp-01_sweep_scale_N16",
+      "description": "Scale Sweep: N=16",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 8,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "drone_count": 16,
+        "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "ttl16_f3_no_ae",
-      "description": "TTL 16, Fanout 3, no anti-entropy",
+      "id": "exp-02_sweep_scale_N64",
+      "description": "Scale Sweep: N=64",
       "parameters": {
         "drone_count": 64,
-        "fanout": 3,
-        "ttl": 16,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "ttl32_f3_no_ae",
-      "description": "TTL 32, Fanout 3, no anti-entropy",
+      "id": "exp-03_sweep_speed_S10",
+      "description": "Speed Sweep: Speed=10",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 32,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "drone_speed": 10,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "ttl4_f5_no_ae",
-      "description": "TTL 4, Fanout 5, no anti-entropy",
+      "id": "exp-04_sweep_speed_S30",
+      "description": "Speed Sweep: Speed=30",
       "parameters": {
-        "drone_count": 64,
+        "drone_speed": 30,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-05_sweep_speed_S40",
+      "description": "Speed Sweep: Speed=40",
+      "parameters": {
+        "drone_speed": 40,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-06_sweep_speed_S50",
+      "description": "Speed Sweep: Speed=50",
+      "parameters": {
+        "drone_speed": 50,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-07_sweep_range_R150",
+      "description": "Range Sweep: Range=150",
+      "parameters": {
+        "drone_range": 150,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-08_sweep_range_R225",
+      "description": "Range Sweep: Range=225",
+      "parameters": {
+        "drone_range": 225,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-09_sweep_range_R375",
+      "description": "Range Sweep: Range=375",
+      "parameters": {
+        "drone_range": 375,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-10_sweep_range_R450",
+      "description": "Range Sweep: Range=450",
+      "parameters": {
+        "drone_range": 450,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-11_sweep_atten_A3.0",
+      "description": "Attenuation Sweep: Att=3.0",
+      "parameters": {
+        "attenuation_exponent": 3.0,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-12_sweep_atten_A3.75",
+      "description": "Attenuation Sweep: Att=3.75",
+      "parameters": {
+        "attenuation_exponent": 3.75,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-13_sweep_loss_L2",
+      "description": "Loss Sweep: Loss=2%",
+      "parameters": {
+        "loss_rate_percent": 2,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-14_sweep_loss_L5",
+      "description": "Loss Sweep: Loss=5%",
+      "parameters": {
+        "loss_rate_percent": 5,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-15_sweep_loss_L10",
+      "description": "Loss Sweep: Loss=10%",
+      "parameters": {
+        "loss_rate_percent": 10,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-16_sweep_loss_L15",
+      "description": "Loss Sweep: Loss=15%",
+      "parameters": {
+        "loss_rate_percent": 15,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-17_sweep_model_RandomDirection",
+      "description": "Model Sweep: RandomDirection",
+      "parameters": {
+        "mobility_model": "RandomDirection",
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-18_sweep_model_RandomWayPoint",
+      "description": "Model Sweep: RandomWayPoint",
+      "parameters": {
+        "mobility_model": "RandomWayPoint",
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-19_sweep_model_TruncatedLevyWalk",
+      "description": "Model Sweep: TruncatedLevyWalk",
+      "parameters": {
+        "mobility_model": "TruncatedLevyWalk",
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-20_sweep_fanout_F2",
+      "description": "Fanout Sweep: F=2",
+      "parameters": {
+        "fanout": 2,
+        "drone_count": 32, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-21_sweep_fanout_F4",
+      "description": "Fanout Sweep: F=4",
+      "parameters": {
+        "fanout": 4,
+        "drone_count": 32, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-22_sweep_fanout_F5",
+      "description": "Fanout Sweep: F=5",
+      "parameters": {
         "fanout": 5,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "drone_count": 32, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "ttl4_f7_no_ae",
-      "description": "TTL 4, Fanout 7, no anti-entropy",
+      "id": "exp-23_sweep_fanout_F6",
+      "description": "Fanout Sweep: F=6",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 7,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "fanout": 6,
+        "drone_count": 32, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "ttl4_f9_no_ae",
-      "description": "TTL 4, Fanout 9, no anti-entropy",
+      "id": "exp-24_sweep_ttl_T2",
+      "description": "TTL Sweep: T=2",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 9,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "ttl": 2,
+        "drone_count": 32, "fanout": 3, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "fast_delta_1s_no_ae",
-      "description": "Fast delta push 1s, no anti-entropy",
+      "id": "exp-25_sweep_ttl_T3",
+      "description": "TTL Sweep: T=3",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 4,
+        "ttl": 3,
+        "drone_count": 32, "fanout": 3, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-26_sweep_ttl_T5",
+      "description": "TTL Sweep: T=5",
+      "parameters": {
+        "ttl": 5,
+        "drone_count": 32, "fanout": 3, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-27_sweep_ttl_T6",
+      "description": "TTL Sweep: T=6",
+      "parameters": {
+        "ttl": 6,
+        "drone_count": 32, "fanout": 3, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-28_sweep_delta_D1",
+      "description": "Delta Push Sweep: 1s",
+      "parameters": {
         "delta_push_interval_sec": 1,
-        "anti_entropy_interval_sec": -1,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "drone_count": 32, "fanout": 3, "ttl": 4, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "fast_delta_1s_ae60",
-      "description": "Fast delta push 1s, anti-entropy 60s",
+      "id": "exp-29_sweep_delta_D5",
+      "description": "Delta Push Sweep: 5s",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 4,
-        "delta_push_interval_sec": 1,
-        "anti_entropy_interval_sec": 60,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "delta_push_interval_sec": 5,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
     },
     {
-      "id": "baseline_fast_ae30",
-      "description": "Baseline with fast anti-entropy 30s",
+      "id": "exp-30_sweep_ae_AE15",
+      "description": "Anti-Entropy Sweep: 15s",
       "parameters": {
-        "drone_count": 64,
-        "fanout": 3,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
+        "anti_entropy_interval_sec": 15,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-31_sweep_ae_AE30",
+      "description": "Anti-Entropy Sweep: 30s",
+      "parameters": {
         "anti_entropy_interval_sec": 30,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomDirection"
-      },
-      "enabled": true
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-32_sweep_ae_AE120",
+      "description": "Anti-Entropy Sweep: 120s",
+      "parameters": {
+        "anti_entropy_interval_sec": 120,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-33_sweep_sample_S2",
+      "description": "Sample Rate Sweep: 2s",
+      "parameters": {
+        "sample_interval_sec": 2,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": true
+    },
+    {
+      "id": "exp-34_sweep_sample_S5",
+      "description": "Sample Rate Sweep: 5s",
+      "parameters": {
+        "sample_interval_sec": 5,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-35_sweep_sample_S20",
+      "description": "Sample Rate Sweep: 20s",
+      "parameters": {
+        "sample_interval_sec": 20,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-36_sweep_sample_S30",
+      "description": "Sample Rate Sweep: 30s",
+      "parameters": {
+        "sample_interval_sec": 30,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "x_max": 1650, "y_max": 1650, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-37_sweep_density_high_A1000",
+      "description": "Density Sweep: 1000x1000m",
+      "parameters": {
+        "x_max": 1000, "y_max": 1000,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-38_sweep_density_medhigh_A1325",
+      "description": "Density Sweep: 1325x1325m",
+      "parameters": {
+        "x_max": 1325, "y_max": 1325,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-39_sweep_density_medlow_A1975",
+      "description": "Density Sweep: 1975x1975m",
+      "parameters": {
+        "x_max": 1975, "y_max": 1975,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "drone_height": 50
+      }, "enabled": false
+    },
+    {
+      "id": "exp-40_sweep_density_low_A2300",
+      "description": "Density Sweep: 2300x2300m",
+      "parameters": {
+        "x_max": 2300, "y_max": 2300,
+        "drone_count": 32, "fanout": 3, "ttl": 4, "delta_push_interval_sec": 3, "anti_entropy_interval_sec": 60, "sample_interval_sec": 10, "duration_sec": 300, "loss_rate_percent": 0, "mobility_model": "GaussMarkov", "drone_speed": 20, "drone_range": 300, "attenuation_exponent": 4.5, "drone_height": 50
+      }, "enabled": false
     }
   ]
 }
