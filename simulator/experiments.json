@@ -1,10 +1,10 @@
 {
   "experiments": [
     {
-      "id": "baseline_N100_F3_T4",
-      "description": "Baseline experiment with 10 drones, fanout 3, TTL 4",
+      "id": "baseline_F3_T4_AE60",
+      "description": "Baseline: Fanout 3, TTL 4, Anti-entropy 60s",
       "parameters": {
-        "drone_count": 100,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -12,79 +12,31 @@
         "sample_interval_sec": 10,
         "duration_sec": 30,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
       "enabled": true
     },
     {
-      "id": "fanout_sweep_N10_F2",
-      "description": "Fanout sensitivity - F=2",
+      "id": "baseline_no_ae",
+      "description": "Baseline with no anti-entropy",
       "parameters": {
-        "drone_count": 10,
-        "fanout": 2,
+        "drone_count": 64,
+        "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
+        "anti_entropy_interval_sec": -1,
         "sample_interval_sec": 10,
         "duration_sec": 60,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
       "enabled": false
     },
     {
-      "id": "fanout_sweep_N10_F4",
-      "description": "Fanout sensitivity - F=4",
+      "id": "baseline_ae60",
+      "description": "Baseline with 60s anti-entropy (anti-entropy fanout = 1)",
       "parameters": {
-        "drone_count": 10,
-        "fanout": 4,
-        "ttl": 4,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
-      },
-      "enabled": false
-    },
-    {
-      "id": "ttl_sweep_N10_T3",
-      "description": "TTL sensitivity - T=3",
-      "parameters": {
-        "drone_count": 10,
-        "fanout": 3,
-        "ttl": 3,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
-      },
-      "enabled": false
-    },
-    {
-      "id": "ttl_sweep_N10_T6",
-      "description": "TTL sensitivity - T=6",
-      "parameters": {
-        "drone_count": 10,
-        "fanout": 3,
-        "ttl": 6,
-        "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
-        "sample_interval_sec": 10,
-        "duration_sec": 300,
-        "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
-      },
-      "enabled": false
-    },
-    {
-      "id": "scaling_N16_F3_T4",
-      "description": "Scaling test - 16 drones",
-      "parameters": {
-        "drone_count": 16,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -92,47 +44,127 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
-      "id": "scaling_N32_F3_T4",
-      "description": "Scaling test - 32 drones",
+      "id": "ttl8_f3_no_ae",
+      "description": "TTL 8, Fanout 3, no anti-entropy",
       "parameters": {
-        "drone_count": 32,
+        "drone_count": 64,
         "fanout": 3,
-        "ttl": 4,
+        "ttl": 8,
         "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
+        "anti_entropy_interval_sec": -1,
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
-      "id": "loss_test_N10_L5",
-      "description": "Network loss test - 5% packet loss",
+      "id": "ttl16_f3_no_ae",
+      "description": "TTL 16, Fanout 3, no anti-entropy",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
-        "ttl": 4,
+        "ttl": 16,
         "delta_push_interval_sec": 3,
-        "anti_entropy_interval_sec": 60,
+        "anti_entropy_interval_sec": -1,
         "sample_interval_sec": 10,
         "duration_sec": 300,
-        "loss_rate_percent": 5,
-        "mobility_model": "RandomWaypoint"
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
-      "id": "delta_interval_test_N10_D1",
-      "description": "Fast delta push - every 1 second",
+      "id": "ttl32_f3_no_ae",
+      "description": "TTL 32, Fanout 3, no anti-entropy",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
+        "fanout": 3,
+        "ttl": 32,
+        "delta_push_interval_sec": 3,
+        "anti_entropy_interval_sec": -1,
+        "sample_interval_sec": 10,
+        "duration_sec": 300,
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
+      },
+      "enabled": true
+    },
+    {
+      "id": "ttl4_f5_no_ae",
+      "description": "TTL 4, Fanout 5, no anti-entropy",
+      "parameters": {
+        "drone_count": 64,
+        "fanout": 5,
+        "ttl": 4,
+        "delta_push_interval_sec": 3,
+        "anti_entropy_interval_sec": -1,
+        "sample_interval_sec": 10,
+        "duration_sec": 300,
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
+      },
+      "enabled": true
+    },
+    {
+      "id": "ttl4_f7_no_ae",
+      "description": "TTL 4, Fanout 7, no anti-entropy",
+      "parameters": {
+        "drone_count": 64,
+        "fanout": 7,
+        "ttl": 4,
+        "delta_push_interval_sec": 3,
+        "anti_entropy_interval_sec": -1,
+        "sample_interval_sec": 10,
+        "duration_sec": 300,
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
+      },
+      "enabled": true
+    },
+    {
+      "id": "ttl4_f9_no_ae",
+      "description": "TTL 4, Fanout 9, no anti-entropy",
+      "parameters": {
+        "drone_count": 64,
+        "fanout": 9,
+        "ttl": 4,
+        "delta_push_interval_sec": 3,
+        "anti_entropy_interval_sec": -1,
+        "sample_interval_sec": 10,
+        "duration_sec": 300,
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
+      },
+      "enabled": true
+    },
+    {
+      "id": "fast_delta_1s_no_ae",
+      "description": "Fast delta push 1s, no anti-entropy",
+      "parameters": {
+        "drone_count": 64,
+        "fanout": 3,
+        "ttl": 4,
+        "delta_push_interval_sec": 1,
+        "anti_entropy_interval_sec": -1,
+        "sample_interval_sec": 10,
+        "duration_sec": 300,
+        "loss_rate_percent": 0,
+        "mobility_model": "RandomDirection"
+      },
+      "enabled": true
+    },
+    {
+      "id": "fast_delta_1s_ae60",
+      "description": "Fast delta push 1s, anti-entropy 60s",
+      "parameters": {
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 1,
@@ -140,15 +172,15 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     },
     {
-      "id": "ae_interval_test_N10_AE30",
-      "description": "Frequent anti-entropy - every 30 seconds",
+      "id": "baseline_fast_ae30",
+      "description": "Baseline with fast anti-entropy 30s",
       "parameters": {
-        "drone_count": 10,
+        "drone_count": 64,
         "fanout": 3,
         "ttl": 4,
         "delta_push_interval_sec": 3,
@@ -156,9 +188,9 @@
         "sample_interval_sec": 10,
         "duration_sec": 300,
         "loss_rate_percent": 0,
-        "mobility_model": "RandomWaypoint"
+        "mobility_model": "RandomDirection"
       },
-      "enabled": false
+      "enabled": true
     }
   ]
 }

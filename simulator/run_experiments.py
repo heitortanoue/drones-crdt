@@ -61,8 +61,8 @@ class ExperimentRunner:
 
             # Cooldown between experiments
             if idx < len(self.experiments):
-                info("\n--- Cooldown period (30 seconds) ---\n")
-                time.sleep(30)
+                info("\n--- Cooldown period (3 seconds) ---\n")
+                time.sleep(3)
 
         info(f"\n{'='*80}\n")
         info(f"EXPERIMENT SUITE COMPLETE\n")
@@ -163,7 +163,7 @@ class ExperimentRunner:
 
         # Cleanup
         info("*** Cleaning up ***\n")
-        self._cleanup_drones()
+        # self._cleanup_drones()
         net.stop()
 
     def _setup_topology(self, params: Dict):

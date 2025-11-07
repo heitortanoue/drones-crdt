@@ -99,9 +99,12 @@ def main():
             info(f"Opened {filename} for data logging.\n")
 
         stop_event = threading.Event()
+        convergence_metrics = {}
 
         fetch_thread = threading.Thread(
-            target=fetch_states, args=(drones, stop_event, csv_writers), daemon=True
+            target=fetch_states,
+            args=(drones, stop_event, csv_writers, convergence_metrics),
+            daemon=True,
         )
         fetch_thread.start()
 
@@ -138,6 +141,15 @@ def main():
         for file_handle in csv_files.values():
             file_handle.close()
         info("Closed all data log files.\n")
+
+        # Save convergence metrics to a summary file
+        if convergence_metrics:
+            import json
+
+            summary_file = os.path.join(OUTPUT_DIR, "convergence_summary.json")
+            with open(summary_file, "w") as f:
+                json.dump(convergence_metrics, f, indent=2)
+            info(f"Convergence summary saved to {summary_file}\n")
 
     info("*** Shutting down simulation ***\n")
     net.stop()
